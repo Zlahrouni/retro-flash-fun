@@ -1,6 +1,6 @@
 // src/services/boardService.ts
 import { db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
 
 export interface BoardData {
     name: string;
@@ -72,5 +72,38 @@ export const getBoard = async (boardId: string): Promise<BoardData | null> => {
     } catch (error) {
         console.error('Erreur lors de la récupération du board:', error);
         throw new Error('Impossible de récupérer le board');
+    }
+};
+
+// Ajoute un participant au board
+export const addParticipantToBoard = async (boardId: string, username: string): Promise<void> => {
+    try {
+        const docRef = doc(db, 'boards', boardId);
+
+        // Vérifier d'abord que le board existe et est actif
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            throw new Error('Board non trouvé');
+        }
+
+        const boardData = docSnap.data() as BoardData;
+        if (!boardData.isActive) {
+            throw new Error('Ce board n\'est plus actif');
+        }
+
+        // Vérifier si l'utilisateur n'est pas déjà dans la liste
+        if (boardData.participants.includes(username)) {
+            // L'utilisateur est déjà participant, pas besoin de l'ajouter
+            return;
+        }
+
+        // Ajouter l'utilisateur à la liste des participants
+        await updateDoc(docRef, {
+            participants: arrayUnion(username)
+        });
+
+    } catch (error) {
+        console.error('Erreur lors de l\'ajout du participant:', error);
+        throw new Error('Impossible d\'ajouter le participant au board');
     }
 };

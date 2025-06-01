@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Target, User, ArrowRight, AlertCircle } from "lucide-react";
-import { getBoard } from "@/services/boardService";
+import { getBoard, addParticipantToBoard } from "@/services/boardService";
 import { toast } from "@/hooks/use-toast";
 
 const UserJoin = () => {
@@ -63,13 +63,23 @@ const UserJoin = () => {
             return;
         }
 
+        if (!retroId) {
+            toast({
+                title: "Erreur",
+                description: "ID du board manquant.",
+                variant: "destructive"
+            });
+            return;
+        }
+
         setJoining(true);
 
         try {
+            // Ajouter l'utilisateur à la liste des participants du board dans Firebase
+            await addParticipantToBoard(retroId, username.trim());
+
             // Sauvegarder le nom d'utilisateur dans localStorage
             localStorage.setItem(`username_${retroId}`, username.trim());
-
-            // TODO: Ajouter l'utilisateur à la liste des participants du board dans Firebase
 
             toast({
                 title: "Bienvenue !",
@@ -79,9 +89,10 @@ const UserJoin = () => {
             // Rediriger vers le board
             navigate(`/retro/${retroId}`);
         } catch (error) {
+            console.error("Erreur lors de l'ajout du participant:", error);
             toast({
                 title: "Erreur",
-                description: "Impossible de rejoindre le board. Veuillez réessayer.",
+                description: error instanceof Error ? error.message : "Impossible de rejoindre le board. Veuillez réessayer.",
                 variant: "destructive"
             });
         } finally {
