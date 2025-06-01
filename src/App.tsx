@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Board from "./pages/Board";
 import Icebreaker from "./pages/Icebreaker";
+import RetroTypeSelection from "./pages/RetroTypeSelection";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/retro" element={<RetroTypeSelection />} />
           <Route path="/board/:boardId" element={<Board />} />
           <Route path="/icebreaker" element={<Icebreaker />} />
           <Route path="*" element={<NotFound />} />

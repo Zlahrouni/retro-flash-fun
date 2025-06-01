@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,9 +8,7 @@ const Index = () => {
   const navigate = useNavigate();
 
   const createRetrospective = () => {
-    // Generate a unique board ID
-    const boardId = `${Math.random().toString(36).substr(2, 9)}/${crypto.randomUUID()}`;
-    navigate(`/board/${boardId}`);
+    navigate("/retro");
   };
 
   const startIcebreaker = () => {

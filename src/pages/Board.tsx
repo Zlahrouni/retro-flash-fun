@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Settings, Plus, Vote, Eye, EyeOff } from "lucide-react";
 import BoardSidebar from "@/components/BoardSidebar";
@@ -24,63 +23,30 @@ interface Column {
 
 const Board = () => {
   const { boardId } = useParams();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [votingEnabled, setVotingEnabled] = useState(true);
   const [cardsVisible, setCardsVisible] = useState(true);
   const [showOthersCards, setShowOthersCards] = useState(true);
   const [addingCardsDisabled, setAddingCardsDisabled] = useState(false);
 
-  const [columns, setColumns] = useState<Column[]>([
-    {
-      id: "1",
-      title: "What went well?",
-      color: "bg-green-100 border-green-200",
-      cards: [
-        {
-          id: "1",
-          text: "Great team communication during the sprint",
-          author: "John",
-          votes: 3,
-          hasVoted: false
-        },
-        {
-          id: "2",
-          text: "Successfully delivered all features on time",
-          author: "Jane",
-          votes: 5,
-          hasVoted: true
-        }
-      ]
-    },
-    {
-      id: "2",
-      title: "What could be improved?",
-      color: "bg-yellow-100 border-yellow-200",
-      cards: [
-        {
-          id: "3",
-          text: "Code review process took too long",
-          author: "Mike",
-          votes: 2,
-          hasVoted: false
-        }
-      ]
-    },
-    {
-      id: "3",
-      title: "Action items",
-      color: "bg-blue-100 border-blue-200",
-      cards: [
-        {
-          id: "4",
-          text: "Implement automated testing pipeline",
-          author: "Sarah",
-          votes: 4,
-          hasVoted: false
-        }
-      ]
-    }
-  ]);
+  // Get retro type from navigation state or use default
+  const retroType = location.state?.retroType || {
+    title: "What went well, To improve, Action items",
+    columns: ["What went well?", "What could be improved?", "Action items"]
+  };
+
+  const getDefaultColumns = () => {
+    const colors = ["bg-green-100 border-green-200", "bg-yellow-100 border-yellow-200", "bg-blue-100 border-blue-200"];
+    return retroType.columns.map((title: string, index: number) => ({
+      id: (index + 1).toString(),
+      title,
+      color: colors[index] || "bg-gray-100 border-gray-200",
+      cards: []
+    }));
+  };
+
+  const [columns, setColumns] = useState<Column[]>(getDefaultColumns);
 
   const addCard = (columnId: string, text: string) => {
     if (addingCardsDisabled) {
@@ -168,7 +134,7 @@ const Board = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Board de Rétrospective</h1>
+              <h1 className="text-xl font-bold text-gray-900">{retroType.title}</h1>
               <p className="text-sm text-gray-600">ID: {boardId}</p>
             </div>
             <div className="flex items-center space-x-3">
