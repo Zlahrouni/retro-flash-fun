@@ -50,7 +50,15 @@ const RetroTypeSelection = () => {
   const createBoard = (retroType: typeof retroTypes[0]) => {
     // Generate a unique retro ID
     const retroId = `${Math.random().toString(36).substr(2, 9)}`;
-    navigate(`/retro/${retroId}`, { state: { retroType } });
+    
+    // Only pass serializable data
+    const retroData = {
+      id: retroType.id,
+      title: retroType.title,
+      columns: retroType.columns
+    };
+    
+    navigate(`/retro/${retroId}`, { state: { retroType: retroData } });
   };
 
   return (

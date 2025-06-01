@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -36,6 +35,7 @@ const Retro = () => {
 
   // Get retro type from navigation state or use default
   const retroType = location.state?.retroType || {
+    id: "what-went-well",
     title: "What went well, To improve, Action items",
     columns: ["What went well?", "What could be improved?", "Action items"]
   };
