@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,18 +29,22 @@ interface RetroColumnProps {
   cardsVisible: boolean;
   votingEnabled: boolean;
   addingDisabled: boolean;
+  currentUsername: string;
+  userCanVote?: boolean; // Indique si l'utilisateur peut encore voter
 }
 
 const RetroColumn = ({
-  column,
-  cards,
-  onAddCard,
-  onDeleteCard,
-  onVoteCard,
-  cardsVisible,
-  votingEnabled,
-  addingDisabled
-}: RetroColumnProps) => {
+                       column,
+                       cards,
+                       onAddCard,
+                       onDeleteCard,
+                       onVoteCard,
+                       cardsVisible,
+                       votingEnabled,
+                       addingDisabled,
+                       currentUsername,
+                       userCanVote = true
+                     }: RetroColumnProps) => {
   const [newCardText, setNewCardText] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
@@ -66,73 +69,82 @@ const RetroColumn = ({
   const sortedCards = [...cards].sort((a, b) => b.votes - a.votes);
 
   return (
-    <Card className={`${column.color} border-2 h-fit min-h-[400px]`}>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg font-semibold text-gray-800 flex items-center justify-between">
-          {column.title}
-          <span className="text-sm font-normal text-gray-600 bg-white/60 px-2 py-1 rounded-full">
+      <Card className={`${column.color} border-2 h-fit min-h-[400px]`}>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold text-gray-800 flex items-center justify-between">
+            {column.title}
+            <span className="text-sm font-normal text-gray-600 bg-white/60 px-2 py-1 rounded-full">
             {cards.length}
           </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Cards */}
-        {cardsVisible && sortedCards.map((card) => (
-          <RetroCard
-            key={card.id}
-            card={card}
-            onDelete={() => onDeleteCard(column.id, card.id)}
-            onVote={() => onVoteCard(column.id, card.id)}
-            votingEnabled={votingEnabled}
-          />
-        ))}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* Cards */}
+          {cardsVisible && sortedCards.map((card) => (
+              <RetroCard
+                  key={card.id}
+                  card={card}
+                  onDelete={() => onDeleteCard(column.id, card.id)}
+                  onVote={() => onVoteCard(column.id, card.id)}
+                  votingEnabled={votingEnabled}
+                  currentUsername={currentUsername}
+                  canVote={userCanVote || card.hasVoted} // Peut voter si limite non atteinte OU si déjà voté (pour retirer le vote)
+              />
+          ))}
 
-        {/* Add Card Section */}
-        {!addingDisabled && (
-          <div className="mt-4">
-            {isAdding ? (
-              <div className="space-y-2">
-                <Input
-                  value={newCardText}
-                  onChange={(e) => setNewCardText(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  placeholder="Tapez votre idée..."
-                  className="text-sm"
-                  autoFocus
-                />
-                <div className="flex space-x-2">
-                  <Button size="sm" onClick={handleAddCard} disabled={!newCardText.trim()}>
-                    Ajouter
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setIsAdding(false);
-                    setNewCardText("");
-                  }}>
-                    Annuler
-                  </Button>
-                </div>
+          {/* Message quand les cartes sont masquées */}
+          {!cardsVisible && (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">Les cartes sont masquées</p>
               </div>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsAdding(true)}
-                className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-white/60"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Ajouter une carte
-              </Button>
-            )}
-          </div>
-        )}
+          )}
 
-        {addingDisabled && (
-          <div className="mt-4 p-3 text-center text-sm text-gray-500 bg-white/30 rounded-lg">
-            L'ajout de cartes a été désactivé
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {/* Add Card Section */}
+          {!addingDisabled && (
+              <div className="mt-4">
+                {isAdding ? (
+                    <div className="space-y-2">
+                      <Input
+                          value={newCardText}
+                          onChange={(e) => setNewCardText(e.target.value)}
+                          onKeyDown={handleKeyPress}
+                          placeholder="Tapez votre idée..."
+                          className="text-sm"
+                          autoFocus
+                      />
+                      <div className="flex space-x-2">
+                        <Button size="sm" onClick={handleAddCard} disabled={!newCardText.trim()}>
+                          Ajouter
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => {
+                          setIsAdding(false);
+                          setNewCardText("");
+                        }}>
+                          Annuler
+                        </Button>
+                      </div>
+                    </div>
+                ) : (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsAdding(true)}
+                        className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-white/60"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Ajouter une carte
+                    </Button>
+                )}
+              </div>
+          )}
+
+          {addingDisabled && (
+              <div className="mt-4 p-3 text-center text-sm text-gray-500 bg-white/30 rounded-lg">
+                L'ajout de cartes a été désactivé
+              </div>
+          )}
+        </CardContent>
+      </Card>
   );
 };
 

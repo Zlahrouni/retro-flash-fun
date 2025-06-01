@@ -1,6 +1,14 @@
 // src/services/boardService.ts
 import { db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
+import {
+    doc,
+    setDoc,
+    getDoc,
+    updateDoc,
+    arrayUnion,
+    Timestamp,
+    onSnapshot
+} from 'firebase/firestore';
 
 export interface BoardData {
     name: string;
@@ -20,6 +28,13 @@ export interface CreateBoardParams {
     username: string;
     type: string;
     columns: string[];
+}
+
+export interface UpdateBoardSettingsParams {
+    boardId: string;
+    hideCardsFromOthers?: boolean;
+    votingEnabled?: boolean;
+    votesPerParticipant?: number;
 }
 
 // Génère un ID unique alphanumérique de 6 caractères maximum
@@ -105,5 +120,71 @@ export const addParticipantToBoard = async (boardId: string, username: string): 
     } catch (error) {
         console.error('Erreur lors de l\'ajout du participant:', error);
         throw new Error('Impossible d\'ajouter le participant au board');
+    }
+};
+
+// Met à jour les paramètres du board
+export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Promise<void> => {
+    try {
+        const docRef = doc(db, 'boards', params.boardId);
+
+        // Créer un objet avec seulement les champs à mettre à jour
+        const updates: Partial<BoardData> = {};
+
+        if (params.hideCardsFromOthers !== undefined) {
+            updates.hideCardsFromOthers = params.hideCardsFromOthers;
+        }
+
+        if (params.votingEnabled !== undefined) {
+            updates.votingEnabled = params.votingEnabled;
+        }
+
+        if (params.votesPerParticipant !== undefined) {
+            updates.votesPerParticipant = params.votesPerParticipant;
+        }
+
+        await updateDoc(docRef, updates);
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour des paramètres:', error);
+        throw new Error('Impossible de mettre à jour les paramètres du board');
+    }
+};
+
+// Ferme définitivement un board
+export const closeBoardPermanently = async (boardId: string): Promise<void> => {
+    try {
+        const docRef = doc(db, 'boards', boardId);
+        await updateDoc(docRef, {
+            isActive: false
+        });
+    } catch (error) {
+        console.error('Erreur lors de la fermeture du board:', error);
+        throw new Error('Impossible de fermer le board');
+    }
+};
+
+// Écoute en temps réel les changements du board
+export const subscribeToBoardUpdates = (
+    boardId: string,
+    callback: (boardData: BoardData | null) => void
+): (() => void) => {
+    try {
+        const docRef = doc(db, 'boards', boardId);
+
+        const unsubscribe = onSnapshot(docRef, (doc) => {
+            if (doc.exists()) {
+                callback(doc.data() as BoardData);
+            } else {
+                callback(null);
+            }
+        }, (error) => {
+            console.error('Erreur lors de l\'écoute du board:', error);
+            callback(null);
+        });
+
+        return unsubscribe;
+    } catch (error) {
+        console.error('Erreur lors de la souscription au board:', error);
+        throw new Error('Impossible de souscrire aux mises à jour du board');
     }
 };

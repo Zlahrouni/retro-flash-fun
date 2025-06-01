@@ -6,7 +6,16 @@ import { Settings, Share2, Target, Users, AlertCircle } from "lucide-react";
 import RetroSidebar from "@/components/RetroSidebar";
 import RetroColumn from "@/components/RetroColumn";
 import { toast } from "@/hooks/use-toast";
-import { getBoard, BoardData } from "@/services/boardService";
+import { getBoard, BoardData, subscribeToBoardUpdates, updateBoardSettings } from "@/services/boardService";
+import {
+  createNote,
+  deleteNote,
+  toggleVote,
+  subscribeToNotes,
+  canUserVote,
+  filterNotesByVisibility,
+  NoteData
+} from "@/services/notesService";
 
 interface Card {
   id: string;
@@ -30,6 +39,7 @@ const Retro = () => {
 
   // États pour les données Firebase
   const [boardData, setBoardData] = useState<BoardData | null>(null);
+  const [notes, setNotes] = useState<NoteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState("");
@@ -43,6 +53,85 @@ const Retro = () => {
   const [maxVotesPerPerson, setMaxVotesPerPerson] = useState(3);
   const [isMaster, setIsMaster] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
+
+  // Fonction pour mettre à jour les paramètres locaux ET Firebase
+  const updateVotingEnabled = async (enabled: boolean) => {
+    // Mise à jour locale immédiate pour la réactivité
+    setVotingEnabled(enabled);
+
+    if (retroId && retroId !== "local" && boardData && isMaster) {
+      try {
+        await updateBoardSettings({
+          boardId: retroId,
+          votingEnabled: enabled
+        });
+        toast({
+          title: "Paramètre mis à jour",
+          description: `Votes ${enabled ? 'activés' : 'désactivés'} pour tous les participants.`,
+        });
+      } catch (error) {
+        console.error("Erreur sync voting:", error);
+        toast({
+          title: "Erreur de synchronisation",
+          description: "Les paramètres restent locaux uniquement.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const updateShowOthersCards = async (show: boolean) => {
+    // Mise à jour locale immédiate pour la réactivité
+    setShowOthersCards(show);
+
+    if (retroId && retroId !== "local" && boardData && isMaster) {
+      try {
+        await updateBoardSettings({
+          boardId: retroId,
+          hideCardsFromOthers: !show
+        });
+        toast({
+          title: "Visibilité mise à jour",
+          description: `Les cartes sont maintenant ${show ? 'visibles pour tous' : 'masquées entre participants'}.`,
+        });
+      } catch (error) {
+        console.error("Erreur sync visibility:", error);
+        toast({
+          title: "Erreur de synchronisation",
+          description: "Les paramètres restent locaux uniquement.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const updateMaxVotesPerPerson = async (max: number) => {
+    // Validation
+    if (max < 1 || max > 20) return;
+
+    // Mise à jour locale immédiate pour la réactivité
+    setMaxVotesPerPerson(max);
+
+    if (retroId && retroId !== "local" && boardData && isMaster) {
+      try {
+        await updateBoardSettings({
+          boardId: retroId,
+          votesPerParticipant: max
+        });
+        toast({
+          title: "Limite de votes mise à jour",
+          description: `Chaque participant peut maintenant voter ${max} fois maximum.`,
+        });
+      } catch (error) {
+        console.error("Erreur sync votes:", error);
+        toast({
+          title: "Erreur de synchronisation",
+          description: "Les paramètres restent locaux uniquement.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   // Fonction pour créer les colonnes par défaut à partir des données du board
   const createColumnsFromBoardData = (boardData: BoardData): Column[] => {
@@ -59,7 +148,7 @@ const Retro = () => {
     }));
   };
 
-  // Fonction pour créer les colonnes par défaut (fallback pour ancienne logique)
+  // Fonction pour créer les colonnes par défaut (fallback pour mode hors ligne)
   const getDefaultColumns = () => {
     const retroType = location.state?.retroType || {
       title: "What went well, To improve, Action items",
@@ -79,7 +168,21 @@ const Retro = () => {
     }));
   };
 
-  // Charger les données du board depuis Firebase
+  // Fonction pour convertir les notes Firebase en cartes pour l'interface
+  const convertNotesToCards = (notes: NoteData[], columnTitle: string, currentUserId: string): Card[] => {
+    return notes
+        .filter(note => note.column === columnTitle)
+        .map(note => ({
+          id: note.id!,
+          text: note.content,
+          author: note.createdBy,
+          votes: note.voteCount,
+          hasVoted: note.voters.includes(currentUserId)
+        }))
+        .sort((a, b) => b.votes - a.votes); // Trier par votes décroissants
+  };
+
+  // Charger les données du board et s'abonner aux notes
   useEffect(() => {
     const loadBoard = async () => {
       if (!retroId) {
@@ -139,6 +242,35 @@ const Retro = () => {
         // Créer les colonnes depuis les données du board
         setColumns(createColumnsFromBoardData(data));
 
+        // S'abonner aux mises à jour du board en temps réel
+        const unsubscribeBoard = subscribeToBoardUpdates(retroId, (updatedBoardData) => {
+          if (updatedBoardData) {
+            setBoardData(updatedBoardData);
+            // Mettre à jour les états locaux avec les données Firebase
+            setVotingEnabled(updatedBoardData.votingEnabled);
+            setShowOthersCards(!updatedBoardData.hideCardsFromOthers);
+            setMaxVotesPerPerson(updatedBoardData.votesPerParticipant);
+
+            // Si le board devient inactif, rediriger
+            if (!updatedBoardData.isActive) {
+              setError("Ce board a été fermé par l'administrateur");
+            }
+          } else {
+            setError("Board supprimé ou inaccessible");
+          }
+        });
+
+        // S'abonner aux notes en temps réel
+        const unsubscribeNotes = subscribeToNotes(retroId, (notesData) => {
+          setNotes(notesData);
+        });
+
+        // Nettoyer les abonnements au démontage du composant
+        return () => {
+          unsubscribeBoard();
+          unsubscribeNotes();
+        };
+
       } catch (err) {
         console.error("Erreur lors du chargement du board:", err);
         // En cas d'erreur Firebase, utiliser les données par défaut
@@ -154,8 +286,33 @@ const Retro = () => {
     loadBoard();
   }, [retroId, location.state, navigate]);
 
+  // Mettre à jour les colonnes quand les notes changent
+  useEffect(() => {
+    if (columns.length > 0 && notes.length >= 0) {
+      // Utiliser les paramètres en temps réel pour le filtrage
+      const hideFromOthers = boardData ? boardData.hideCardsFromOthers : !showOthersCards;
+      const filteredNotes = filterNotesByVisibility(notes, currentUsername, hideFromOthers);
+
+      setColumns(prev => prev.map(column => ({
+        ...column,
+        cards: convertNotesToCards(filteredNotes, column.title, currentUsername)
+      })));
+    }
+  }, [notes, currentUsername, boardData, showOthersCards]);
+
+  // Debug pour vérifier la synchronisation
+  useEffect(() => {
+    if (boardData) {
+      console.log("BoardData mis à jour:", {
+        votingEnabled: boardData.votingEnabled,
+        hideCardsFromOthers: boardData.hideCardsFromOthers,
+        votesPerParticipant: boardData.votesPerParticipant
+      });
+    }
+  }, [boardData]);
+
   // Fonctions de gestion des cartes
-  const addCard = (columnId: string, text: string) => {
+  const addCard = async (columnId: string, text: string) => {
     if (addingCardsDisabled) {
       toast({
         title: "Action non autorisée",
@@ -165,44 +322,92 @@ const Retro = () => {
       return;
     }
 
-    const newCard: Card = {
-      id: Date.now().toString(),
-      text,
-      author: currentUsername,
-      votes: 0,
-      hasVoted: false
-    };
+    if (!retroId || !boardData) {
+      // Mode hors ligne - garder l'ancienne logique
+      const newCard: Card = {
+        id: Date.now().toString(),
+        text,
+        author: currentUsername,
+        votes: 0,
+        hasVoted: false
+      };
 
-    setColumns(prev =>
-        prev.map(col =>
-            col.id === columnId
-                ? { ...col, cards: [...col.cards, newCard] }
-                : col
-        )
-    );
+      setColumns(prev =>
+          prev.map(col =>
+              col.id === columnId
+                  ? { ...col, cards: [...col.cards, newCard] }
+                  : col
+          )
+      );
 
-    toast({
-      title: "Carte ajoutée",
-      description: "Votre carte a été ajoutée avec succès.",
-    });
+      toast({
+        title: "Carte ajoutée",
+        description: "Votre carte a été ajoutée avec succès.",
+      });
+      return;
+    }
+
+    try {
+      const column = columns.find(col => col.id === columnId);
+      if (!column) return;
+
+      await createNote({
+        boardId: retroId,
+        content: text,
+        column: column.title,
+        createdBy: currentUsername
+      });
+
+      toast({
+        title: "Carte ajoutée",
+        description: "Votre carte a été ajoutée avec succès.",
+      });
+    } catch (error) {
+      console.error("Erreur lors de l'ajout de la carte:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'ajouter la carte. Veuillez réessayer.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const deleteCard = (columnId: string, cardId: string) => {
-    setColumns(prev =>
-        prev.map(col =>
-            col.id === columnId
-                ? { ...col, cards: col.cards.filter(card => card.id !== cardId) }
-                : col
-        )
-    );
+  const deleteCard = async (columnId: string, cardId: string) => {
+    if (!retroId || !boardData) {
+      // Mode hors ligne - garder l'ancienne logique
+      setColumns(prev =>
+          prev.map(col =>
+              col.id === columnId
+                  ? { ...col, cards: col.cards.filter(card => card.id !== cardId) }
+                  : col
+          )
+      );
 
-    toast({
-      title: "Carte supprimée",
-      description: "La carte a été supprimée avec succès.",
-    });
+      toast({
+        title: "Carte supprimée",
+        description: "La carte a été supprimée avec succès.",
+      });
+      return;
+    }
+
+    try {
+      await deleteNote(retroId, cardId);
+
+      toast({
+        title: "Carte supprimée",
+        description: "La carte a été supprimée avec succès.",
+      });
+    } catch (error) {
+      console.error("Erreur lors de la suppression de la carte:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer la carte. Veuillez réessayer.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const voteCard = (columnId: string, cardId: string) => {
+  const voteCard = async (columnId: string, cardId: string) => {
     if (!votingEnabled) {
       toast({
         title: "Votes désactivés",
@@ -212,28 +417,67 @@ const Retro = () => {
       return;
     }
 
-    setColumns(prev =>
-        prev.map(col =>
-            col.id === columnId
-                ? {
-                  ...col,
-                  cards: col.cards.map(card =>
-                      card.id === cardId
-                          ? {
-                            ...card,
-                            votes: card.hasVoted ? card.votes - 1 : card.votes + 1,
-                            hasVoted: !card.hasVoted
-                          }
-                          : card
-                  )
-                }
-                : col
-        )
-    );
+    if (!retroId || !boardData) {
+      // Mode hors ligne - garder l'ancienne logique
+      setColumns(prev =>
+          prev.map(col =>
+              col.id === columnId
+                  ? {
+                    ...col,
+                    cards: col.cards.map(card =>
+                        card.id === cardId
+                            ? {
+                              ...card,
+                              votes: card.hasVoted ? card.votes - 1 : card.votes + 1,
+                              hasVoted: !card.hasVoted
+                            }
+                            : card
+                    )
+                  }
+                  : col
+          )
+      );
+      return;
+    }
+
+    try {
+      // Vérifier si l'utilisateur a encore des votes disponibles
+      const currentNote = notes.find(note => note.id === cardId);
+      if (!currentNote) return;
+
+      const hasVotedForThisCard = currentNote.voters.includes(currentUsername);
+
+      if (!hasVotedForThisCard && !canUserVote(notes, currentUsername, maxVotesPerPerson)) {
+        toast({
+          title: "Limite de votes atteinte",
+          description: `Vous ne pouvez voter que ${maxVotesPerPerson} fois maximum.`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      await toggleVote({
+        boardId: retroId,
+        noteId: cardId,
+        userId: currentUsername
+      });
+
+    } catch (error) {
+      console.error("Erreur lors du vote:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de voter sur cette carte. Veuillez réessayer.",
+        variant: "destructive"
+      });
+    }
   };
 
   const getFilteredCards = (cards: Card[]) => {
-    if (!showOthersCards) {
+    // En mode Firebase, utiliser boardData.hideCardsFromOthers
+    // En mode local, utiliser showOthersCards
+    const shouldHide = boardData ? boardData.hideCardsFromOthers : !showOthersCards;
+
+    if (shouldHide) {
       return cards.filter(card => card.author === currentUsername);
     }
     return cards;
@@ -303,6 +547,11 @@ const Retro = () => {
   const displayTitle = boardData ? boardData.name : (location.state?.retroType?.title || "Rétrospective");
   const displayId = retroId || "local";
 
+  // Calculer les votes restants pour l'utilisateur
+  const userVotesUsed = retroId && boardData ?
+      notes.reduce((count, note) => count + (note.voters.includes(currentUsername) ? 1 : 0), 0) : 0;
+  const userVotesRemaining = maxVotesPerPerson - userVotesUsed;
+
   return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         {/* Header */}
@@ -328,6 +577,20 @@ const Retro = () => {
                     )}
                     {currentUsername && (
                         <span className="text-blue-600 font-medium">Vous: {currentUsername}</span>
+                    )}
+                    {boardData && (
+                        <span className="text-green-600">Mode: En ligne</span>
+                    )}
+                    {!boardData && retroId && (
+                        <span className="text-yellow-600">Mode: Connexion...</span>
+                    )}
+                    {!retroId && (
+                        <span className="text-orange-600">Mode: Hors ligne</span>
+                    )}
+                    {votingEnabled && (
+                        <span className="text-green-600">
+                                            Votes restants: {userVotesRemaining}/{maxVotesPerPerson}
+                                        </span>
                     )}
                   </div>
                 </div>
@@ -375,6 +638,8 @@ const Retro = () => {
                         cardsVisible={cardsVisible}
                         votingEnabled={votingEnabled}
                         addingDisabled={addingCardsDisabled}
+                        currentUsername={currentUsername}
+                        userCanVote={userVotesRemaining > 0}
                     />
                 ))}
               </div>
