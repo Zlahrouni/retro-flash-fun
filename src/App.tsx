@@ -10,6 +10,7 @@ import Retro from "./pages/Retro";
 import Icebreaker from "./pages/Icebreaker";
 import RetroTypeSelection from "./pages/RetroTypeSelection";
 import NotFound from "./pages/NotFound";
+import UserJoin from "@/pages/UserJoin.tsx";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/retro" element={<RetroTypeSelection />} />
           <Route path="/retro/:retroId" element={<Retro />} />
+          <Route path="/join/:retroId" element={<UserJoin />} />
           <Route path="/board/:boardId" element={<Board />} />
           <Route path="/icebreaker" element={<Icebreaker />} />
           <Route path="*" element={<NotFound />} />
