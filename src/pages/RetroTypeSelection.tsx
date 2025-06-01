@@ -48,9 +48,9 @@ const RetroTypeSelection = () => {
   ];
 
   const createBoard = (retroType: typeof retroTypes[0]) => {
-    // Generate a unique board ID
-    const boardId = `${Math.random().toString(36).substr(2, 9)}/${crypto.randomUUID()}`;
-    navigate(`/board/${boardId}`, { state: { retroType } });
+    // Generate a unique retro ID
+    const retroId = `${Math.random().toString(36).substr(2, 9)}`;
+    navigate(`/retro/${retroId}`, { state: { retroType } });
   };
 
   return (

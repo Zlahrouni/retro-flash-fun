@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Board from "./pages/Board";
+import Retro from "./pages/Retro";
 import Icebreaker from "./pages/Icebreaker";
 import RetroTypeSelection from "./pages/RetroTypeSelection";
 import NotFound from "./pages/NotFound";
@@ -21,6 +22,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/retro" element={<RetroTypeSelection />} />
+          <Route path="/retro/:retroId" element={<Retro />} />
           <Route path="/board/:boardId" element={<Board />} />
           <Route path="/icebreaker" element={<Icebreaker />} />
           <Route path="*" element={<NotFound />} />
