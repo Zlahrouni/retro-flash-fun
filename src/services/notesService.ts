@@ -24,6 +24,7 @@ export interface NoteData {
     createdAt: Timestamp;
     voteCount: number;
     voters: string[];
+    highlighted: boolean; // Nouveau champ pour la mise en évidence
 }
 
 export interface CreateNoteParams {
@@ -39,6 +40,11 @@ export interface VoteParams {
     userId: string;
 }
 
+export interface HighlightParams {
+    boardId: string;
+    noteId: string;
+}
+
 // Crée une nouvelle note dans la sous-collection
 export const createNote = async (params: CreateNoteParams): Promise<string> => {
     try {
@@ -50,7 +56,8 @@ export const createNote = async (params: CreateNoteParams): Promise<string> => {
             createdBy: params.createdBy,
             createdAt: Timestamp.now(),
             voteCount: 0,
-            voters: []
+            voters: [],
+            highlighted: false // Par défaut, les nouvelles notes ne sont pas mises en évidence
         };
 
         const docRef = await addDoc(notesRef, noteData);
@@ -70,9 +77,11 @@ export const getNotes = async (boardId: string): Promise<NoteData[]> => {
 
         const notes: NoteData[] = [];
         querySnapshot.forEach((doc) => {
+            const data = doc.data();
             notes.push({
                 id: doc.id,
-                ...doc.data()
+                highlighted: false, // Valeur par défaut pour la compatibilité avec les anciennes notes
+                ...data
             } as NoteData);
         });
 
@@ -129,6 +138,35 @@ export const toggleVote = async (params: VoteParams): Promise<void> => {
     }
 };
 
+// Toggle la mise en évidence d'une note (fonction pour les admins)
+export const toggleHighlight = async (params: HighlightParams): Promise<void> => {
+    try {
+        const noteRef = doc(db, 'boards', params.boardId, 'notes', params.noteId);
+
+        // Récupérer la note actuelle pour vérifier son état de mise en évidence
+        const noteDoc = await getDocs(query(collection(db, 'boards', params.boardId, 'notes')));
+        const currentNote = noteDoc.docs.find(doc => doc.id === params.noteId);
+
+        if (!currentNote) {
+            throw new Error('Note non trouvée');
+        }
+
+        const noteData = currentNote.data() as NoteData;
+        const isHighlighted = noteData.highlighted || false; // Valeur par défaut pour la compatibilité
+
+        // Toggle l'état de mise en évidence
+        await updateDoc(noteRef, {
+            highlighted: !isHighlighted
+        });
+
+        console.log(`Note ${params.noteId} mise en évidence: ${!isHighlighted}`);
+
+    } catch (error) {
+        console.error('Erreur lors de la mise en évidence:', error);
+        throw new Error('Impossible de modifier la mise en évidence de cette note');
+    }
+};
+
 // Réinitialise tous les votes d'un board
 export const resetAllVotes = async (boardId: string): Promise<void> => {
     try {
@@ -157,6 +195,33 @@ export const resetAllVotes = async (boardId: string): Promise<void> => {
     }
 };
 
+// Réinitialise toutes les mises en évidence d'un board
+export const resetAllHighlights = async (boardId: string): Promise<void> => {
+    try {
+        const notesRef = collection(db, 'boards', boardId, 'notes');
+        const querySnapshot = await getDocs(notesRef);
+
+        // Utiliser un batch pour mettre à jour toutes les notes en une seule transaction
+        const batch = writeBatch(db);
+
+        querySnapshot.forEach((doc) => {
+            const noteRef = doc.ref;
+            batch.update(noteRef, {
+                highlighted: false
+            });
+        });
+
+        // Exécuter toutes les mises à jour
+        await batch.commit();
+
+        console.log(`Toutes les mises en évidence ont été réinitialisées pour le board ${boardId}`);
+
+    } catch (error) {
+        console.error('Erreur lors de la réinitialisation des mises en évidence:', error);
+        throw new Error('Impossible de réinitialiser les mises en évidence');
+    }
+};
+
 // Écoute en temps réel les changements de notes
 export const subscribeToNotes = (
     boardId: string,
@@ -169,9 +234,11 @@ export const subscribeToNotes = (
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const notes: NoteData[] = [];
             snapshot.forEach((doc) => {
+                const data = doc.data();
                 notes.push({
                     id: doc.id,
-                    ...doc.data()
+                    highlighted: false, // Valeur par défaut pour la compatibilité
+                    ...data
                 } as NoteData);
             });
             callback(notes);
@@ -211,6 +278,17 @@ export const filterNotesByVisibility = (
     return notes;
 };
 
+// Filtre les notes selon les mises en évidence (nouvelle fonction)
+export const filterNotesByHighlight = (
+    notes: NoteData[],
+    showOnlyHighlighted: boolean
+): NoteData[] => {
+    if (showOnlyHighlighted) {
+        return notes.filter(note => note.highlighted === true);
+    }
+    return notes;
+};
+
 // Obtient le nombre total de votes d'un utilisateur
 export const getUserVoteCount = (notes: NoteData[], userId: string): number => {
     return notes.reduce((count, note) => {
@@ -237,5 +315,25 @@ export const getVoteStatistics = (notes: NoteData[]): {
         totalCards,
         averageVotesPerCard,
         mostVotedCard
+    };
+};
+
+// Obtient les statistiques des mises en évidence pour un board
+export const getHighlightStatistics = (notes: NoteData[]): {
+    totalHighlighted: number;
+    highlightedByColumn: Record<string, number>;
+} => {
+    const totalHighlighted = notes.filter(note => note.highlighted).length;
+    const highlightedByColumn: Record<string, number> = {};
+
+    notes.forEach(note => {
+        if (note.highlighted) {
+            highlightedByColumn[note.column] = (highlightedByColumn[note.column] || 0) + 1;
+        }
+    });
+
+    return {
+        totalHighlighted,
+        highlightedByColumn
     };
 };

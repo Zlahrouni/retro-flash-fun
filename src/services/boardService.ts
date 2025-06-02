@@ -20,7 +20,8 @@ export interface BoardData {
     hideCardsFromOthers: boolean;
     votingEnabled: boolean;
     votesPerParticipant: number;
-    addingCardsDisabled: boolean; // Nouveau champ ajouté
+    addingCardsDisabled: boolean;
+    showOnlyHighlighted: boolean; // Nouveau champ pour l'affichage des cartes en évidence
     participants: string[];
 }
 
@@ -36,7 +37,8 @@ export interface UpdateBoardSettingsParams {
     hideCardsFromOthers?: boolean;
     votingEnabled?: boolean;
     votesPerParticipant?: number;
-    addingCardsDisabled?: boolean; // Nouveau paramètre
+    addingCardsDisabled?: boolean;
+    showOnlyHighlighted?: boolean; // Nouveau paramètre
 }
 
 // Génère un ID unique alphanumérique de 6 caractères maximum
@@ -64,6 +66,7 @@ export const createBoard = async (params: CreateBoardParams): Promise<string> =>
         votingEnabled: false, // Par défaut, votes désactivés
         votesPerParticipant: 3, // Par défaut, 3 votes maximum
         addingCardsDisabled: false, // Par défaut, ajout de cartes autorisé
+        showOnlyHighlighted: false, // Par défaut, afficher toutes les cartes
         participants: [params.username]
     };
 
@@ -85,9 +88,10 @@ export const getBoard = async (boardId: string): Promise<BoardData | null> => {
         if (docSnap.exists()) {
             const data = docSnap.data() as Partial<BoardData>;
 
-            // Assurer la compatibilité avec les anciens boards qui n'ont pas le nouveau champ
+            // Assurer la compatibilité avec les anciens boards qui n'ont pas les nouveaux champs
             return {
                 addingCardsDisabled: false, // Valeur par défaut
+                showOnlyHighlighted: false, // Valeur par défaut
                 ...data
             } as BoardData;
         } else {
@@ -171,6 +175,10 @@ export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Pr
             updates.addingCardsDisabled = params.addingCardsDisabled;
         }
 
+        if (params.showOnlyHighlighted !== undefined) {
+            updates.showOnlyHighlighted = params.showOnlyHighlighted;
+        }
+
         // Effectuer la mise à jour
         await updateDoc(docRef, updates);
 
@@ -220,6 +228,7 @@ export const subscribeToBoardUpdates = (
                 // Assurer la compatibilité avec les anciens boards
                 const boardData: BoardData = {
                     addingCardsDisabled: false, // Valeur par défaut
+                    showOnlyHighlighted: false, // Valeur par défaut
                     ...data
                 } as BoardData;
 

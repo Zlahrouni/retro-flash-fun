@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Trash2, Eye, Users, Plus, Vote, Crown, Settings as SettingsIcon, Save, AlertTriangle, RotateCcw } from "lucide-react";
+import { Trash2, Eye, Users, Plus, Vote, Crown, Settings as SettingsIcon, Save, AlertTriangle, RotateCcw, Star, Sparkles } from "lucide-react";
 import { closeBoardPermanently, updateBoardSettings, BoardData } from "@/services/boardService";
-import { resetAllVotes } from "@/services/notesService";
+import { resetAllVotes, resetAllHighlights } from "@/services/notesService";
 import { toast } from "@/hooks/use-toast";
 
 interface RetroSidebarProps {
@@ -39,16 +39,19 @@ const RetroSidebar = ({
   const [localShowOthersCards, setLocalShowOthersCards] = useState(true);
   const [localAddingCardsDisabled, setLocalAddingCardsDisabled] = useState(false);
   const [localMaxVotesPerPerson, setLocalMaxVotesPerPerson] = useState(3);
+  const [localShowOnlyHighlighted, setLocalShowOnlyHighlighted] = useState(false); // Nouveau paramètre
 
   // États pour les dialogues
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showResetVotesDialog, setShowResetVotesDialog] = useState(false);
+  const [showResetHighlightsDialog, setShowResetHighlightsDialog] = useState(false); // Nouveau dialogue
 
   // État pour le suivi des modifications
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isResettingVotes, setIsResettingVotes] = useState(false);
+  const [isResettingHighlights, setIsResettingHighlights] = useState(false); // Nouvel état
 
   // Initialiser les valeurs locales quand boardData change
   useEffect(() => {
@@ -57,6 +60,7 @@ const RetroSidebar = ({
       setLocalShowOthersCards(!boardData.hideCardsFromOthers);
       setLocalAddingCardsDisabled(boardData.addingCardsDisabled);
       setLocalMaxVotesPerPerson(boardData.votesPerParticipant);
+      setLocalShowOnlyHighlighted(boardData.showOnlyHighlighted || false); // Nouveau champ
       setHasUnsavedChanges(false);
     }
   }, [boardData]);
@@ -66,7 +70,8 @@ const RetroSidebar = ({
       votingEnabled: boolean,
       showOthersCards: boolean,
       addingCardsDisabled: boolean,
-      maxVotes: number
+      maxVotes: number,
+      showOnlyHighlighted: boolean // Nouveau paramètre
   ) => {
     if (!boardData) return false;
 
@@ -74,30 +79,37 @@ const RetroSidebar = ({
         votingEnabled !== boardData.votingEnabled ||
         showOthersCards !== !boardData.hideCardsFromOthers ||
         addingCardsDisabled !== boardData.addingCardsDisabled ||
-        maxVotes !== boardData.votesPerParticipant
+        maxVotes !== boardData.votesPerParticipant ||
+        showOnlyHighlighted !== (boardData.showOnlyHighlighted || false) // Nouveau check
     );
   };
 
   // Gestionnaires de changements avec détection
   const handleVotingChange = (enabled: boolean) => {
     setLocalVotingEnabled(enabled);
-    setHasUnsavedChanges(checkForChanges(enabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson));
+    setHasUnsavedChanges(checkForChanges(enabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, localShowOnlyHighlighted));
   };
 
   const handleVisibilityChange = (show: boolean) => {
     setLocalShowOthersCards(show);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, show, localAddingCardsDisabled, localMaxVotesPerPerson));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, show, localAddingCardsDisabled, localMaxVotesPerPerson, localShowOnlyHighlighted));
   };
 
   const handleAddingCardsChange = (disabled: boolean) => {
     setLocalAddingCardsDisabled(disabled);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, disabled, localMaxVotesPerPerson));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, disabled, localMaxVotesPerPerson, localShowOnlyHighlighted));
   };
 
   const handleMaxVotesChange = (max: number) => {
     if (max < 1 || max > 20) return;
     setLocalMaxVotesPerPerson(max);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, max));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, max, localShowOnlyHighlighted));
+  };
+
+  // Nouveau gestionnaire pour les cartes en évidence
+  const handleShowOnlyHighlightedChange = (show: boolean) => {
+    setLocalShowOnlyHighlighted(show);
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, show));
   };
 
   // Fonction de sauvegarde
@@ -114,7 +126,8 @@ const RetroSidebar = ({
         votingEnabled: localVotingEnabled,
         hideCardsFromOthers: !localShowOthersCards,
         votesPerParticipant: localMaxVotesPerPerson,
-        addingCardsDisabled: localAddingCardsDisabled
+        addingCardsDisabled: localAddingCardsDisabled,
+        showOnlyHighlighted: localShowOnlyHighlighted // Nouveau paramètre
       });
 
       setHasUnsavedChanges(false);
@@ -144,6 +157,7 @@ const RetroSidebar = ({
       setLocalShowOthersCards(!boardData.hideCardsFromOthers);
       setLocalAddingCardsDisabled(boardData.addingCardsDisabled);
       setLocalMaxVotesPerPerson(boardData.votesPerParticipant);
+      setLocalShowOnlyHighlighted(boardData.showOnlyHighlighted || false);
       setHasUnsavedChanges(false);
     }
   };
@@ -204,6 +218,41 @@ const RetroSidebar = ({
       });
     } finally {
       setIsResettingVotes(false);
+    }
+  };
+
+  // Nouvelle fonction de réinitialisation des mises en évidence
+  const handleResetHighlights = async () => {
+    if (!isOnlineMode || retroId === "local") {
+      toast({
+        title: "Action non disponible",
+        description: "La réinitialisation des mises en évidence n'est disponible qu'en mode en ligne.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsResettingHighlights(true);
+
+    try {
+      await resetAllHighlights(retroId);
+
+      toast({
+        title: "Mises en évidence réinitialisées",
+        description: "Toutes les mises en évidence ont été supprimées.",
+      });
+
+      setShowResetHighlightsDialog(false);
+
+    } catch (error) {
+      console.error("Erreur lors de la réinitialisation des mises en évidence:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de réinitialiser les mises en évidence. Veuillez réessayer.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsResettingHighlights(false);
     }
   };
 
@@ -268,6 +317,13 @@ const RetroSidebar = ({
                     <span className="text-sm text-gray-600">Ajout de cartes</span>
                     <span className={`text-sm font-medium ${boardData?.addingCardsDisabled ? 'text-red-600' : 'text-green-600'}`}>
                     {boardData?.addingCardsDisabled ? 'Désactivé' : 'Autorisé'}
+                  </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Mode d'affichage</span>
+                    <span className={`text-sm font-medium ${boardData?.showOnlyHighlighted ? 'text-yellow-600' : 'text-green-600'}`}>
+                    {boardData?.showOnlyHighlighted ? 'Cartes en évidence uniquement' : 'Toutes les cartes'}
                   </span>
                   </div>
                 </div>
@@ -459,6 +515,82 @@ const RetroSidebar = ({
 
             <Separator />
 
+            {/* Nouvelle section : Mise en évidence des cartes */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Star className="w-5 h-5 text-yellow-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Mise en Évidence</h3>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="show-only-highlighted" className="text-sm font-medium">
+                    Afficher uniquement les cartes en évidence
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    Masque toutes les cartes sauf celles mises en évidence
+                  </p>
+                </div>
+                <Switch
+                    id="show-only-highlighted"
+                    checked={localShowOnlyHighlighted}
+                    onCheckedChange={handleShowOnlyHighlightedChange}
+                />
+              </div>
+
+              {/* Bouton de réinitialisation des mises en évidence */}
+              {isOnlineMode && (
+                  <div className="pt-3 border-t border-gray-200">
+                    <AlertDialog open={showResetHighlightsDialog} onOpenChange={setShowResetHighlightsDialog}>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-yellow-600 border-yellow-200 hover:bg-yellow-50"
+                            disabled={isResettingHighlights}
+                        >
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Réinitialiser toutes les mises en évidence
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Réinitialiser toutes les mises en évidence</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Cette action supprimera toutes les mises en évidence de toutes les cartes.
+                            Les cartes resteront intactes, seules les mises en évidence seront supprimées.
+                            Cette action ne peut pas être annulée.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Annuler</AlertDialogCancel>
+                          <AlertDialogAction
+                              onClick={handleResetHighlights}
+                              disabled={isResettingHighlights}
+                              className="bg-yellow-600 hover:bg-yellow-700"
+                          >
+                            {isResettingHighlights ? "Réinitialisation..." : "Confirmer la réinitialisation"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+              )}
+
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Star className="w-4 h-4 text-yellow-600" />
+                  <h5 className="text-sm font-medium text-yellow-800">Conseil d'utilisation</h5>
+                </div>
+                <p className="text-xs text-yellow-700">
+                  En tant qu'administrateur, vous pouvez cliquer sur l'icône étoile ⭐ des cartes pour les mettre en évidence.
+                  Activez ensuite le filtre ci-dessus pour ne montrer que les cartes importantes à tous les participants.
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
             {/* Gestion des cartes */}
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
@@ -632,6 +764,7 @@ const RetroSidebar = ({
                     <div>• Votes : {localVotingEnabled ? `Activés (${localMaxVotesPerPerson} max par personne)` : 'Désactivés'}</div>
                     <div>• Visibilité : {localShowOthersCards ? 'Toutes les cartes visibles' : 'Cartes personnelles uniquement'}</div>
                     <div>• Ajout de cartes : {localAddingCardsDisabled ? 'Désactivé' : 'Autorisé'}</div>
+                    <div>• Affichage : {localShowOnlyHighlighted ? 'Cartes en évidence uniquement' : 'Toutes les cartes'}</div>
                   </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>

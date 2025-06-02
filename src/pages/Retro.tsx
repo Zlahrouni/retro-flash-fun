@@ -13,25 +13,28 @@ import {
   createNote,
   deleteNote,
   toggleVote,
+  toggleHighlight,
   subscribeToNotes,
   canUserVote,
   filterNotesByVisibility,
+  filterNotesByHighlight,
   NoteData
 } from "@/services/notesService";
 
-interface Card {
+interface RetroCardData {
   id: string;
   text: string;
   author: string;
   votes: number;
   hasVoted: boolean;
+  highlighted?: boolean; // Nouveau champ pour la mise en évidence
 }
 
 interface Column {
   id: string;
   title: string;
   color: string;
-  cards: Card[];
+  cards: RetroCardData[];
 }
 
 const Retro = () => {
@@ -89,7 +92,7 @@ const Retro = () => {
   };
 
   // Fonction pour convertir les notes Firebase en cartes pour l'interface
-  const convertNotesToCards = (notes: NoteData[], columnTitle: string, currentUserId: string): Card[] => {
+  const convertNotesToCards = (notes: NoteData[], columnTitle: string, currentUserId: string): RetroCardData[] => {
     return notes
         .filter(note => note.column === columnTitle)
         .map(note => ({
@@ -97,9 +100,15 @@ const Retro = () => {
           text: note.content,
           author: note.createdBy,
           votes: note.voteCount,
-          hasVoted: note.voters.includes(currentUserId)
+          hasVoted: note.voters.includes(currentUserId),
+          highlighted: note.highlighted || false // Nouveau champ
         }))
-        .sort((a, b) => b.votes - a.votes); // Trier par votes décroissants
+        .sort((a, b) => {
+          // Prioriser les cartes mises en évidence, puis trier par votes
+          if (a.highlighted && !b.highlighted) return -1;
+          if (!a.highlighted && b.highlighted) return 1;
+          return b.votes - a.votes;
+        });
   };
 
   // Charger les données du board et s'abonner aux notes
@@ -209,7 +218,13 @@ const Retro = () => {
     if (columns.length > 0 && notes.length >= 0) {
       // Utiliser les paramètres Firebase pour le filtrage
       const hideFromOthers = boardData ? boardData.hideCardsFromOthers : false;
-      const filteredNotes = filterNotesByVisibility(notes, currentUsername, hideFromOthers);
+      const showOnlyHighlighted = boardData ? boardData.showOnlyHighlighted : false;
+
+      // Appliquer les filtres de visibilité
+      let filteredNotes = filterNotesByVisibility(notes, currentUsername, hideFromOthers);
+
+      // Appliquer le filtre de mise en évidence
+      filteredNotes = filterNotesByHighlight(filteredNotes, showOnlyHighlighted);
 
       setColumns(prev => prev.map(column => ({
         ...column,
@@ -234,12 +249,13 @@ const Retro = () => {
 
     if (!retroId || !boardData) {
       // Mode hors ligne - garder l'ancienne logique
-      const newCard: Card = {
+      const newCard: RetroCardData = {
         id: Date.now().toString(),
         text,
         author: currentUsername,
         votes: 0,
-        hasVoted: false
+        hasVoted: false,
+        highlighted: false
       };
 
       setColumns(prev =>
@@ -386,14 +402,81 @@ const Retro = () => {
     }
   };
 
-  const getFilteredCards = (cards: Card[]) => {
-    // En mode Firebase, utiliser boardData.hideCardsFromOthers
-    // En mode local, afficher toutes les cartes
-    const shouldHide = boardData ? boardData.hideCardsFromOthers : false;
-
-    if (shouldHide) {
-      return cards.filter(card => card.author === currentUsername);
+  // Nouvelle fonction pour gérer la mise en évidence des cartes
+  const highlightCard = async (columnId: string, cardId: string) => {
+    // Vérifier que l'utilisateur est admin
+    if (!isMaster) {
+      toast({
+        title: "Action non autorisée",
+        description: "Seul l'administrateur peut mettre en évidence les cartes.",
+        variant: "destructive"
+      });
+      return;
     }
+
+    if (!retroId || !boardData) {
+      // Mode hors ligne - garder l'ancienne logique
+      setColumns(prev =>
+          prev.map(col =>
+              col.id === columnId
+                  ? {
+                    ...col,
+                    cards: col.cards.map(card =>
+                        card.id === cardId
+                            ? { ...card, highlighted: !card.highlighted }
+                            : card
+                    )
+                  }
+                  : col
+          )
+      );
+
+      const card = columns.find(col => col.id === columnId)?.cards.find(c => c.id === cardId);
+      if (card) {
+        toast({
+          title: card.highlighted ? "Mise en évidence retirée" : "Carte mise en évidence",
+          description: card.highlighted
+              ? "La carte n'est plus mise en évidence."
+              : "La carte a été mise en évidence.",
+        });
+      }
+      return;
+    }
+
+    try {
+      await toggleHighlight({
+        boardId: retroId,
+        noteId: cardId
+      });
+
+      const currentNote = notes.find(note => note.id === cardId);
+      if (currentNote) {
+        toast({
+          title: currentNote.highlighted ? "Mise en évidence retirée" : "Carte mise en évidence",
+          description: currentNote.highlighted
+              ? "La carte n'est plus mise en évidence."
+              : "La carte a été mise en évidence.",
+        });
+      }
+
+    } catch (error) {
+      console.error("Erreur lors de la mise en évidence:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier la mise en évidence. Veuillez réessayer.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getFilteredCards = (cards: RetroCardData[]) => {
+    // En mode Firebase, les filtres sont déjà appliqués dans useEffect
+    // En mode local, afficher toutes les cartes ou selon les paramètres locaux
+    if (!boardData) {
+      return cards;
+    }
+
+    // Les filtres sont déjà appliqués via les fonctions de service
     return cards;
   };
 
@@ -470,6 +553,10 @@ const Retro = () => {
   // Vérifier si le système de vote est activé
   const isVotingEnabled = boardData ? boardData.votingEnabled : true;
 
+  // Calculer les statistiques de mise en évidence
+  const highlightedCardsCount = notes.filter(note => note.highlighted).length;
+  const totalCardsCount = notes.length;
+
   return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         {/* Header */}
@@ -533,6 +620,22 @@ const Retro = () => {
                     {!isVotingEnabled && activeTab === "retro-board" && (
                         <span className="text-gray-500 font-medium">Votes désactivés</span>
                     )}
+
+                    {/* Informations de mise en évidence (pour l'admin) */}
+                    {isMaster && activeTab === "retro-board" && highlightedCardsCount > 0 && (
+                        <div className="flex items-center space-x-1">
+                          <span className="text-yellow-600 font-medium">
+                            ⭐ {highlightedCardsCount}/{totalCardsCount} en évidence
+                          </span>
+                        </div>
+                    )}
+
+                    {/* Indicateur de filtre actif */}
+                    {boardData?.showOnlyHighlighted && (
+                        <span className="text-yellow-600 font-medium bg-yellow-100 px-2 py-1 rounded-full text-xs">
+                          🔍 Mode évidence
+                        </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -582,6 +685,22 @@ const Retro = () => {
             </TabsList>
 
             <TabsContent value="retro-board" className="mt-0">
+              {/* Message d'information sur le mode mise en évidence */}
+              {boardData?.showOnlyHighlighted && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-yellow-600">⭐</span>
+                      <div>
+                        <h4 className="text-sm font-medium text-yellow-800">Mode mise en évidence activé</h4>
+                        <p className="text-sm text-yellow-700">
+                          Seules les cartes mises en évidence par l'administrateur sont affichées.
+                          {isMaster && " Vous pouvez désactiver ce mode dans les paramètres."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+              )}
+
               <RetroBoard
                   columns={columns}
                   boardData={boardData}
@@ -592,7 +711,10 @@ const Retro = () => {
                   onAddCard={addCard}
                   onDeleteCard={deleteCard}
                   onVoteCard={voteCard}
+                  onHighlightCard={highlightCard}
                   getFilteredCards={getFilteredCards}
+                  isMaster={isMaster}
+                  showHighlightButtons={isMaster && !!boardData} // Afficher les boutons de mise en évidence seulement pour l'admin en mode en ligne
               />
             </TabsContent>
 

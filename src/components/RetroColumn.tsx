@@ -5,32 +5,36 @@ import { Input } from "@/components/ui/input";
 import { Plus, Lock } from "lucide-react";
 import RetroCard from "./RetroCard";
 
-interface Card {
+interface RetroCardData {
     id: string;
     text: string;
     author: string;
     votes: number;
     hasVoted: boolean;
+    highlighted?: boolean; // Nouveau champ pour la mise en évidence
 }
 
 interface Column {
     id: string;
     title: string;
     color: string;
-    cards: Card[];
+    cards: RetroCardData[];
 }
 
 interface RetroColumnProps {
     column: Column;
-    cards: Card[];
+    cards: RetroCardData[];
     onAddCard: (columnId: string, text: string) => void;
     onDeleteCard: (columnId: string, cardId: string) => void;
     onVoteCard: (columnId: string, cardId: string) => void;
+    onHighlightCard?: (columnId: string, cardId: string) => void; // Nouvelle fonction pour la mise en évidence
     cardsVisible: boolean;
     votingEnabled: boolean;
     addingDisabled: boolean;
     currentUsername: string;
     userCanVote?: boolean; // Indique si l'utilisateur peut encore voter
+    isMaster?: boolean; // Indique si l'utilisateur est admin
+    showHighlightButtons?: boolean; // Contrôle l'affichage des boutons de mise en évidence
 }
 
 const RetroColumn = ({
@@ -39,11 +43,14 @@ const RetroColumn = ({
                          onAddCard,
                          onDeleteCard,
                          onVoteCard,
+                         onHighlightCard,
                          cardsVisible,
                          votingEnabled,
                          addingDisabled,
                          currentUsername,
-                         userCanVote = true
+                         userCanVote = true,
+                         isMaster = false,
+                         showHighlightButtons = false
                      }: RetroColumnProps) => {
     const [newCardText, setNewCardText] = useState("");
     const [isAdding, setIsAdding] = useState(false);
@@ -65,14 +72,31 @@ const RetroColumn = ({
         }
     };
 
-    // Sort cards by votes (highest first)
-    const sortedCards = [...cards].sort((a, b) => b.votes - a.votes);
+    // Sort cards by votes (highest first), puis par statut de mise en évidence
+    const sortedCards = [...cards].sort((a, b) => {
+        // Prioriser les cartes mises en évidence
+        if (a.highlighted && !b.highlighted) return -1;
+        if (!a.highlighted && b.highlighted) return 1;
+        // Puis trier par votes
+        return b.votes - a.votes;
+    });
+
+    // Compter les cartes mises en évidence dans cette colonne
+    const highlightedCount = cards.filter(card => card.highlighted).length;
 
     return (
         <Card className={`${column.color} border-2 h-fit min-h-[400px]`}>
             <CardHeader className="pb-4">
                 <CardTitle className="text-lg font-semibold text-gray-800 flex items-center justify-between">
-                    {column.title}
+                    <div className="flex items-center space-x-2">
+                        <span>{column.title}</span>
+                        {highlightedCount > 0 && (
+                            <div className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full border border-yellow-300 flex items-center space-x-1">
+                                <span>⭐</span>
+                                <span>{highlightedCount}</span>
+                            </div>
+                        )}
+                    </div>
                     <span className="text-sm font-normal text-gray-600 bg-white/60 px-2 py-1 rounded-full">
             {cards.length}
           </span>
@@ -86,9 +110,12 @@ const RetroColumn = ({
                         card={card}
                         onDelete={() => onDeleteCard(column.id, card.id)}
                         onVote={() => onVoteCard(column.id, card.id)}
+                        onHighlight={onHighlightCard ? () => onHighlightCard(column.id, card.id) : undefined}
                         votingEnabled={votingEnabled}
                         currentUsername={currentUsername}
                         canVote={userCanVote || card.hasVoted} // Peut voter si limite non atteinte OU si déjà voté (pour retirer le vote)
+                        isMaster={isMaster}
+                        showHighlightButton={showHighlightButtons}
                     />
                 ))}
 
@@ -96,6 +123,20 @@ const RetroColumn = ({
                 {!cardsVisible && (
                     <div className="text-center py-8 text-gray-500">
                         <p className="text-sm">Les cartes sont masquées</p>
+                    </div>
+                )}
+
+                {/* Message quand il n'y a pas de cartes visibles */}
+                {cardsVisible && sortedCards.length === 0 && cards.length > 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <p className="text-sm text-yellow-700">
+                                <span className="font-medium">Aucune carte en évidence dans cette colonne</span>
+                            </p>
+                            <p className="text-xs text-yellow-600 mt-1">
+                                Toutes les cartes sont masquées car seules les cartes en évidence sont affichées.
+                            </p>
+                        </div>
                     </div>
                 )}
 
