@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, Share2, Target, Users, AlertCircle, Crown, User } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Settings, Share2, Target, Users, AlertCircle, Crown, User, Grid3X3, CheckSquare } from "lucide-react";
 import RetroSidebar from "@/components/RetroSidebar";
-import RetroColumn from "@/components/RetroColumn";
+import RetroBoard from "@/components/RetroBoard";
+import ActionBoard from "@/components/ActionBoard";
 import { toast } from "@/hooks/use-toast";
 import { getBoard, BoardData, subscribeToBoardUpdates } from "@/services/boardService";
 import {
@@ -49,6 +51,7 @@ const Retro = () => {
   const [cardsVisible, setCardsVisible] = useState(true);
   const [isMaster, setIsMaster] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
+  const [activeTab, setActiveTab] = useState("retro-board");
 
   // Fonction pour créer les colonnes par défaut à partir des données du board
   const createColumnsFromBoardData = (boardData: BoardData): Column[] => {
@@ -519,7 +522,7 @@ const Retro = () => {
                     )}
 
                     {/* Informations de vote */}
-                    {isVotingEnabled && (
+                    {isVotingEnabled && activeTab === "retro-board" && (
                         <div className="flex items-center space-x-1">
                       <span className={`text-sm font-medium ${userVotesRemaining > 0 ? 'text-green-600' : 'text-red-600'}`}>
                         Votes: {userVotesRemaining}/{maxVotesPerPerson}
@@ -527,7 +530,7 @@ const Retro = () => {
                         </div>
                     )}
 
-                    {!isVotingEnabled && (
+                    {!isVotingEnabled && activeTab === "retro-board" && (
                         <span className="text-gray-500 font-medium">Votes désactivés</span>
                     )}
                   </div>
@@ -558,31 +561,50 @@ const Retro = () => {
           </div>
         </header>
 
-        {/* Main Content */}
+        {/* Main Content with Tabs */}
         <main className="container mx-auto px-4 py-8">
-          {columns.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">Aucune colonne configurée</p>
-              </div>
-          ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {columns.map((column) => (
-                    <RetroColumn
-                        key={column.id}
-                        column={column}
-                        cards={getFilteredCards(column.cards)}
-                        onAddCard={addCard}
-                        onDeleteCard={deleteCard}
-                        onVoteCard={voteCard}
-                        cardsVisible={cardsVisible}
-                        votingEnabled={isVotingEnabled}
-                        addingDisabled={boardData ? boardData.addingCardsDisabled : false}
-                        currentUsername={currentUsername}
-                        userCanVote={userVotesRemaining > 0}
-                    />
-                ))}
-              </div>
-          )}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8 bg-white/80 backdrop-blur-sm">
+              <TabsTrigger
+                  value="retro-board"
+                  className="flex items-center space-x-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-900"
+              >
+                <Grid3X3 className="w-4 h-4" />
+                <span>Retro Board</span>
+              </TabsTrigger>
+              <TabsTrigger
+                  value="actions"
+                  className="flex items-center space-x-2 data-[state=active]:bg-green-100 data-[state=active]:text-green-900"
+              >
+                <CheckSquare className="w-4 h-4" />
+                <span>Actions</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="retro-board" className="mt-0">
+              <RetroBoard
+                  columns={columns}
+                  boardData={boardData}
+                  currentUsername={currentUsername}
+                  cardsVisible={cardsVisible}
+                  isVotingEnabled={isVotingEnabled}
+                  userVotesRemaining={userVotesRemaining}
+                  onAddCard={addCard}
+                  onDeleteCard={deleteCard}
+                  onVoteCard={voteCard}
+                  getFilteredCards={getFilteredCards}
+              />
+            </TabsContent>
+
+            <TabsContent value="actions" className="mt-0">
+              <ActionBoard
+                  boardData={boardData}
+                  currentUsername={currentUsername}
+                  isMaster={isMaster}
+                  retroId={displayId}
+              />
+            </TabsContent>
+          </Tabs>
         </main>
 
         {/* Sidebar */}
