@@ -12,7 +12,8 @@ import {
     Timestamp,
     onSnapshot,
     query,
-    orderBy
+    orderBy,
+    writeBatch
 } from 'firebase/firestore';
 
 export interface NoteData {
@@ -128,6 +129,34 @@ export const toggleVote = async (params: VoteParams): Promise<void> => {
     }
 };
 
+// Réinitialise tous les votes d'un board
+export const resetAllVotes = async (boardId: string): Promise<void> => {
+    try {
+        const notesRef = collection(db, 'boards', boardId, 'notes');
+        const querySnapshot = await getDocs(notesRef);
+
+        // Utiliser un batch pour mettre à jour toutes les notes en une seule transaction
+        const batch = writeBatch(db);
+
+        querySnapshot.forEach((doc) => {
+            const noteRef = doc.ref;
+            batch.update(noteRef, {
+                voteCount: 0,
+                voters: []
+            });
+        });
+
+        // Exécuter toutes les mises à jour
+        await batch.commit();
+
+        console.log(`Tous les votes ont été réinitialisés pour le board ${boardId}`);
+
+    } catch (error) {
+        console.error('Erreur lors de la réinitialisation des votes:', error);
+        throw new Error('Impossible de réinitialiser les votes');
+    }
+};
+
 // Écoute en temps réel les changements de notes
 export const subscribeToNotes = (
     boardId: string,
@@ -180,4 +209,33 @@ export const filterNotesByVisibility = (
         return notes.filter(note => note.createdBy === currentUserId);
     }
     return notes;
+};
+
+// Obtient le nombre total de votes d'un utilisateur
+export const getUserVoteCount = (notes: NoteData[], userId: string): number => {
+    return notes.reduce((count, note) => {
+        return count + (note.voters.includes(userId) ? 1 : 0);
+    }, 0);
+};
+
+// Obtient les statistiques de votes pour un board
+export const getVoteStatistics = (notes: NoteData[]): {
+    totalVotes: number;
+    totalCards: number;
+    averageVotesPerCard: number;
+    mostVotedCard: NoteData | null;
+} => {
+    const totalVotes = notes.reduce((sum, note) => sum + note.voteCount, 0);
+    const totalCards = notes.length;
+    const averageVotesPerCard = totalCards > 0 ? totalVotes / totalCards : 0;
+    const mostVotedCard = notes.length > 0
+        ? notes.reduce((max, note) => note.voteCount > max.voteCount ? note : max)
+        : null;
+
+    return {
+        totalVotes,
+        totalCards,
+        averageVotesPerCard,
+        mostVotedCard
+    };
 };

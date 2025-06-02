@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, Share2, Target, Users, AlertCircle } from "lucide-react";
+import { Settings, Share2, Target, Users, AlertCircle, Crown, User } from "lucide-react";
 import RetroSidebar from "@/components/RetroSidebar";
 import RetroColumn from "@/components/RetroColumn";
 import { toast } from "@/hooks/use-toast";
-import { getBoard, BoardData, subscribeToBoardUpdates, updateBoardSettings } from "@/services/boardService";
+import { getBoard, BoardData, subscribeToBoardUpdates } from "@/services/boardService";
 import {
   createNote,
   deleteNote,
@@ -46,92 +46,9 @@ const Retro = () => {
 
   // États pour l'interface
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [votingEnabled, setVotingEnabled] = useState(false);
   const [cardsVisible, setCardsVisible] = useState(true);
-  const [showOthersCards, setShowOthersCards] = useState(true);
-  const [addingCardsDisabled, setAddingCardsDisabled] = useState(false);
-  const [maxVotesPerPerson, setMaxVotesPerPerson] = useState(3);
   const [isMaster, setIsMaster] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
-
-  // Fonction pour mettre à jour les paramètres locaux ET Firebase
-  const updateVotingEnabled = async (enabled: boolean) => {
-    // Mise à jour locale immédiate pour la réactivité
-    setVotingEnabled(enabled);
-
-    if (retroId && retroId !== "local" && boardData && isMaster) {
-      try {
-        await updateBoardSettings({
-          boardId: retroId,
-          votingEnabled: enabled
-        });
-        toast({
-          title: "Paramètre mis à jour",
-          description: `Votes ${enabled ? 'activés' : 'désactivés'} pour tous les participants.`,
-        });
-      } catch (error) {
-        console.error("Erreur sync voting:", error);
-        toast({
-          title: "Erreur de synchronisation",
-          description: "Les paramètres restent locaux uniquement.",
-          variant: "destructive"
-        });
-      }
-    }
-  };
-
-  const updateShowOthersCards = async (show: boolean) => {
-    // Mise à jour locale immédiate pour la réactivité
-    setShowOthersCards(show);
-
-    if (retroId && retroId !== "local" && boardData && isMaster) {
-      try {
-        await updateBoardSettings({
-          boardId: retroId,
-          hideCardsFromOthers: !show
-        });
-        toast({
-          title: "Visibilité mise à jour",
-          description: `Les cartes sont maintenant ${show ? 'visibles pour tous' : 'masquées entre participants'}.`,
-        });
-      } catch (error) {
-        console.error("Erreur sync visibility:", error);
-        toast({
-          title: "Erreur de synchronisation",
-          description: "Les paramètres restent locaux uniquement.",
-          variant: "destructive"
-        });
-      }
-    }
-  };
-
-  const updateMaxVotesPerPerson = async (max: number) => {
-    // Validation
-    if (max < 1 || max > 20) return;
-
-    // Mise à jour locale immédiate pour la réactivité
-    setMaxVotesPerPerson(max);
-
-    if (retroId && retroId !== "local" && boardData && isMaster) {
-      try {
-        await updateBoardSettings({
-          boardId: retroId,
-          votesPerParticipant: max
-        });
-        toast({
-          title: "Limite de votes mise à jour",
-          description: `Chaque participant peut maintenant voter ${max} fois maximum.`,
-        });
-      } catch (error) {
-        console.error("Erreur sync votes:", error);
-        toast({
-          title: "Erreur de synchronisation",
-          description: "Les paramètres restent locaux uniquement.",
-          variant: "destructive"
-        });
-      }
-    }
-  };
 
   // Fonction pour créer les colonnes par défaut à partir des données du board
   const createColumnsFromBoardData = (boardData: BoardData): Column[] => {
@@ -188,7 +105,6 @@ const Retro = () => {
       if (!retroId) {
         // Mode hors ligne : utiliser les données par défaut
         setColumns(getDefaultColumns());
-        setVotingEnabled(true);
         setCurrentUsername("Vous");
         setIsMaster(true);
         setLoading(false);
@@ -234,11 +150,6 @@ const Retro = () => {
         const username = savedUsername || data.createdBy;
         setIsMaster(username === data.createdBy);
 
-        // Initialiser les paramètres depuis Firebase
-        setVotingEnabled(data.votingEnabled);
-        setShowOthersCards(!data.hideCardsFromOthers);
-        setMaxVotesPerPerson(data.votesPerParticipant);
-
         // Créer les colonnes depuis les données du board
         setColumns(createColumnsFromBoardData(data));
 
@@ -246,14 +157,19 @@ const Retro = () => {
         const unsubscribeBoard = subscribeToBoardUpdates(retroId, (updatedBoardData) => {
           if (updatedBoardData) {
             setBoardData(updatedBoardData);
-            // Mettre à jour les états locaux avec les données Firebase
-            setVotingEnabled(updatedBoardData.votingEnabled);
-            setShowOthersCards(!updatedBoardData.hideCardsFromOthers);
-            setMaxVotesPerPerson(updatedBoardData.votesPerParticipant);
 
             // Si le board devient inactif, rediriger
             if (!updatedBoardData.isActive) {
-              setError("Ce board a été fermé par l'administrateur");
+              setError("Cette rétrospective a été fermée par l'administrateur");
+              toast({
+                title: "Rétrospective fermée",
+                description: "Cette rétrospective a été fermée par l'administrateur.",
+                variant: "destructive"
+              });
+              // Rediriger après 3 secondes
+              setTimeout(() => {
+                navigate("/");
+              }, 3000);
             }
           } else {
             setError("Board supprimé ou inaccessible");
@@ -275,7 +191,6 @@ const Retro = () => {
         console.error("Erreur lors du chargement du board:", err);
         // En cas d'erreur Firebase, utiliser les données par défaut
         setColumns(getDefaultColumns());
-        setVotingEnabled(true);
         setCurrentUsername("Vous");
         setIsMaster(true);
       } finally {
@@ -289,8 +204,8 @@ const Retro = () => {
   // Mettre à jour les colonnes quand les notes changent
   useEffect(() => {
     if (columns.length > 0 && notes.length >= 0) {
-      // Utiliser les paramètres en temps réel pour le filtrage
-      const hideFromOthers = boardData ? boardData.hideCardsFromOthers : !showOthersCards;
+      // Utiliser les paramètres Firebase pour le filtrage
+      const hideFromOthers = boardData ? boardData.hideCardsFromOthers : false;
       const filteredNotes = filterNotesByVisibility(notes, currentUsername, hideFromOthers);
 
       setColumns(prev => prev.map(column => ({
@@ -298,22 +213,14 @@ const Retro = () => {
         cards: convertNotesToCards(filteredNotes, column.title, currentUsername)
       })));
     }
-  }, [notes, currentUsername, boardData, showOthersCards]);
-
-  // Debug pour vérifier la synchronisation
-  useEffect(() => {
-    if (boardData) {
-      console.log("BoardData mis à jour:", {
-        votingEnabled: boardData.votingEnabled,
-        hideCardsFromOthers: boardData.hideCardsFromOthers,
-        votesPerParticipant: boardData.votesPerParticipant
-      });
-    }
-  }, [boardData]);
+  }, [notes, currentUsername, boardData]);
 
   // Fonctions de gestion des cartes
   const addCard = async (columnId: string, text: string) => {
-    if (addingCardsDisabled) {
+    // Vérifier si l'ajout de cartes est désactivé
+    const addingDisabled = boardData ? boardData.addingCardsDisabled : false;
+
+    if (addingDisabled) {
       toast({
         title: "Action non autorisée",
         description: "L'ajout de cartes a été désactivé par l'administrateur.",
@@ -408,10 +315,13 @@ const Retro = () => {
   };
 
   const voteCard = async (columnId: string, cardId: string) => {
+    // Vérifier si le système de vote est activé
+    const votingEnabled = boardData ? boardData.votingEnabled : true;
+
     if (!votingEnabled) {
       toast({
         title: "Votes désactivés",
-        description: "Le vote a été désactivé pour cette session.",
+        description: "Le système de vote a été désactivé par l'administrateur.",
         variant: "destructive"
       });
       return;
@@ -446,11 +356,12 @@ const Retro = () => {
       if (!currentNote) return;
 
       const hasVotedForThisCard = currentNote.voters.includes(currentUsername);
+      const maxVotes = boardData.votesPerParticipant;
 
-      if (!hasVotedForThisCard && !canUserVote(notes, currentUsername, maxVotesPerPerson)) {
+      if (!hasVotedForThisCard && !canUserVote(notes, currentUsername, maxVotes)) {
         toast({
           title: "Limite de votes atteinte",
-          description: `Vous ne pouvez voter que ${maxVotesPerPerson} fois maximum.`,
+          description: `Vous ne pouvez voter que ${maxVotes} fois maximum.`,
           variant: "destructive"
         });
         return;
@@ -474,8 +385,8 @@ const Retro = () => {
 
   const getFilteredCards = (cards: Card[]) => {
     // En mode Firebase, utiliser boardData.hideCardsFromOthers
-    // En mode local, utiliser showOthersCards
-    const shouldHide = boardData ? boardData.hideCardsFromOthers : !showOthersCards;
+    // En mode local, afficher toutes les cartes
+    const shouldHide = boardData ? boardData.hideCardsFromOthers : false;
 
     if (shouldHide) {
       return cards.filter(card => card.author === currentUsername);
@@ -550,7 +461,11 @@ const Retro = () => {
   // Calculer les votes restants pour l'utilisateur
   const userVotesUsed = retroId && boardData ?
       notes.reduce((count, note) => count + (note.voters.includes(currentUsername) ? 1 : 0), 0) : 0;
+  const maxVotesPerPerson = boardData ? boardData.votesPerParticipant : 3;
   const userVotesRemaining = maxVotesPerPerson - userVotesUsed;
+
+  // Vérifier si le système de vote est activé
+  const isVotingEnabled = boardData ? boardData.votingEnabled : true;
 
   return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -566,6 +481,8 @@ const Retro = () => {
                   <h1 className="text-xl font-bold text-gray-900">{displayTitle}</h1>
                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                     <span>ID: {displayId}</span>
+
+                    {/* Informations du board */}
                     {boardData && (
                         <>
                           <div className="flex items-center space-x-1">
@@ -575,26 +492,48 @@ const Retro = () => {
                           <span>Créé par: {boardData.createdBy}</span>
                         </>
                     )}
+
+                    {/* Informations de l'utilisateur */}
                     {currentUsername && (
-                        <span className="text-blue-600 font-medium">Vous: {currentUsername}</span>
+                        <div className="flex items-center space-x-1">
+                          {isMaster ? (
+                              <Crown className="w-4 h-4 text-yellow-600" />
+                          ) : (
+                              <User className="w-4 h-4 text-blue-600" />
+                          )}
+                          <span className={`font-medium ${isMaster ? 'text-yellow-700' : 'text-blue-600'}`}>
+                        {currentUsername} {isMaster && '(Admin)'}
+                      </span>
+                        </div>
                     )}
+
+                    {/* Statut de connexion */}
                     {boardData && (
-                        <span className="text-green-600">Mode: En ligne</span>
+                        <span className="text-green-600 font-medium">⚡ En ligne</span>
                     )}
                     {!boardData && retroId && (
-                        <span className="text-yellow-600">Mode: Connexion...</span>
+                        <span className="text-yellow-600 font-medium">🔄 Connexion...</span>
                     )}
                     {!retroId && (
-                        <span className="text-orange-600">Mode: Hors ligne</span>
+                        <span className="text-orange-600 font-medium">📱 Mode local</span>
                     )}
-                    {votingEnabled && (
-                        <span className="text-green-600">
-                                            Votes restants: {userVotesRemaining}/{maxVotesPerPerson}
-                                        </span>
+
+                    {/* Informations de vote */}
+                    {isVotingEnabled && (
+                        <div className="flex items-center space-x-1">
+                      <span className={`text-sm font-medium ${userVotesRemaining > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        Votes: {userVotesRemaining}/{maxVotesPerPerson}
+                      </span>
+                        </div>
+                    )}
+
+                    {!isVotingEnabled && (
+                        <span className="text-gray-500 font-medium">Votes désactivés</span>
                     )}
                   </div>
                 </div>
               </div>
+
               <div className="flex items-center space-x-3">
                 <Button
                     variant="outline"
@@ -612,7 +551,7 @@ const Retro = () => {
                     className="flex items-center space-x-2"
                 >
                   <Settings className="w-4 h-4" />
-                  <span>Paramètres</span>
+                  <span>{isMaster ? 'Administration' : 'Informations'}</span>
                 </Button>
               </div>
             </div>
@@ -636,8 +575,8 @@ const Retro = () => {
                         onDeleteCard={deleteCard}
                         onVoteCard={voteCard}
                         cardsVisible={cardsVisible}
-                        votingEnabled={votingEnabled}
-                        addingDisabled={addingCardsDisabled}
+                        votingEnabled={isVotingEnabled}
+                        addingDisabled={boardData ? boardData.addingCardsDisabled : false}
                         currentUsername={currentUsername}
                         userCanVote={userVotesRemaining > 0}
                     />
@@ -650,18 +589,13 @@ const Retro = () => {
         <RetroSidebar
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
-            votingEnabled={votingEnabled}
-            onToggleVoting={setVotingEnabled}
-            showOthersCards={showOthersCards}
-            onToggleShowOthersCards={setShowOthersCards}
-            addingCardsDisabled={addingCardsDisabled}
-            onToggleAddingCards={setAddingCardsDisabled}
-            maxVotesPerPerson={maxVotesPerPerson}
-            onMaxVotesChange={setMaxVotesPerPerson}
+            boardData={boardData}
             isMaster={isMaster}
-            onToggleMaster={setIsMaster}
             retroId={displayId}
             onCloseRetro={closeRetro}
+            participantCount={boardData ? boardData.participants.length : 1}
+            currentUsername={currentUsername}
+            isOnlineMode={!!boardData}
         />
       </div>
   );

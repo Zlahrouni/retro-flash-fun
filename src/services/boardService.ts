@@ -20,6 +20,7 @@ export interface BoardData {
     hideCardsFromOthers: boolean;
     votingEnabled: boolean;
     votesPerParticipant: number;
+    addingCardsDisabled: boolean; // Nouveau champ ajouté
     participants: string[];
 }
 
@@ -35,6 +36,7 @@ export interface UpdateBoardSettingsParams {
     hideCardsFromOthers?: boolean;
     votingEnabled?: boolean;
     votesPerParticipant?: number;
+    addingCardsDisabled?: boolean; // Nouveau paramètre
 }
 
 // Génère un ID unique alphanumérique de 6 caractères maximum
@@ -58,9 +60,10 @@ export const createBoard = async (params: CreateBoardParams): Promise<string> =>
         createdBy: params.username,
         isActive: true,
         columns: params.columns,
-        hideCardsFromOthers: true,
-        votingEnabled: false,
-        votesPerParticipant: 3,
+        hideCardsFromOthers: true, // Par défaut, masquer les cartes des autres
+        votingEnabled: false, // Par défaut, votes désactivés
+        votesPerParticipant: 3, // Par défaut, 3 votes maximum
+        addingCardsDisabled: false, // Par défaut, ajout de cartes autorisé
         participants: [params.username]
     };
 
@@ -80,7 +83,13 @@ export const getBoard = async (boardId: string): Promise<BoardData | null> => {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-            return docSnap.data() as BoardData;
+            const data = docSnap.data() as Partial<BoardData>;
+
+            // Assurer la compatibilité avec les anciens boards qui n'ont pas le nouveau champ
+            return {
+                addingCardsDisabled: false, // Valeur par défaut
+                ...data
+            } as BoardData;
         } else {
             return null;
         }
@@ -123,10 +132,21 @@ export const addParticipantToBoard = async (boardId: string, username: string): 
     }
 };
 
-// Met à jour les paramètres du board
+// Met à jour les paramètres du board (fonction améliorée)
 export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Promise<void> => {
     try {
         const docRef = doc(db, 'boards', params.boardId);
+
+        // Vérifier que le board existe d'abord
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            throw new Error('Board non trouvé');
+        }
+
+        const boardData = docSnap.data() as BoardData;
+        if (!boardData.isActive) {
+            throw new Error('Ce board n\'est plus actif');
+        }
 
         // Créer un objet avec seulement les champs à mettre à jour
         const updates: Partial<BoardData> = {};
@@ -140,10 +160,22 @@ export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Pr
         }
 
         if (params.votesPerParticipant !== undefined) {
+            // Validation de la valeur
+            if (params.votesPerParticipant < 1 || params.votesPerParticipant > 20) {
+                throw new Error('Le nombre de votes doit être entre 1 et 20');
+            }
             updates.votesPerParticipant = params.votesPerParticipant;
         }
 
+        if (params.addingCardsDisabled !== undefined) {
+            updates.addingCardsDisabled = params.addingCardsDisabled;
+        }
+
+        // Effectuer la mise à jour
         await updateDoc(docRef, updates);
+
+        console.log('Paramètres du board mis à jour:', updates);
+
     } catch (error) {
         console.error('Erreur lors de la mise à jour des paramètres:', error);
         throw new Error('Impossible de mettre à jour les paramètres du board');
@@ -154,9 +186,19 @@ export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Pr
 export const closeBoardPermanently = async (boardId: string): Promise<void> => {
     try {
         const docRef = doc(db, 'boards', boardId);
+
+        // Vérifier que le board existe d'abord
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            throw new Error('Board non trouvé');
+        }
+
         await updateDoc(docRef, {
             isActive: false
         });
+
+        console.log('Board fermé définitivement:', boardId);
+
     } catch (error) {
         console.error('Erreur lors de la fermeture du board:', error);
         throw new Error('Impossible de fermer le board');
@@ -173,7 +215,15 @@ export const subscribeToBoardUpdates = (
 
         const unsubscribe = onSnapshot(docRef, (doc) => {
             if (doc.exists()) {
-                callback(doc.data() as BoardData);
+                const data = doc.data() as Partial<BoardData>;
+
+                // Assurer la compatibilité avec les anciens boards
+                const boardData: BoardData = {
+                    addingCardsDisabled: false, // Valeur par défaut
+                    ...data
+                } as BoardData;
+
+                callback(boardData);
             } else {
                 callback(null);
             }
@@ -186,5 +236,75 @@ export const subscribeToBoardUpdates = (
     } catch (error) {
         console.error('Erreur lors de la souscription au board:', error);
         throw new Error('Impossible de souscrire aux mises à jour du board');
+    }
+};
+
+// Fonction utilitaire pour valider les paramètres de board
+export const validateBoardSettings = (settings: Partial<UpdateBoardSettingsParams>): boolean => {
+    if (settings.votesPerParticipant !== undefined) {
+        if (settings.votesPerParticipant < 1 || settings.votesPerParticipant > 20) {
+            return false;
+        }
+    }
+    return true;
+};
+
+// Fonction pour obtenir le statut d'un board sans s'abonner
+export const getBoardStatus = async (boardId: string): Promise<{
+    exists: boolean;
+    isActive: boolean;
+    createdBy?: string;
+}> => {
+    try {
+        const docRef = doc(db, 'boards', boardId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data() as BoardData;
+            return {
+                exists: true,
+                isActive: data.isActive,
+                createdBy: data.createdBy
+            };
+        } else {
+            return {
+                exists: false,
+                isActive: false
+            };
+        }
+    } catch (error) {
+        console.error('Erreur lors de la vérification du statut:', error);
+        return {
+            exists: false,
+            isActive: false
+        };
+    }
+};
+
+// Fonction pour réinitialiser tous les votes d'un board
+export const resetAllVotes = async (boardId: string): Promise<void> => {
+    try {
+        const docRef = doc(db, 'boards', boardId);
+
+        // Vérifier que le board existe d'abord
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            throw new Error('Board non trouvé');
+        }
+
+        const boardData = docSnap.data() as BoardData;
+        if (!boardData.isActive) {
+            throw new Error('Ce board n\'est plus actif');
+        }
+
+        // Note: Cette fonction ne fait que marquer qu'une réinitialisation est demandée
+        // La réinitialisation réelle des votes se fait côté notes dans notesService
+        // Ici on pourrait ajouter un timestamp de dernière réinitialisation si nécessaire
+
+        console.log('Demande de réinitialisation des votes pour le board:', boardId);
+
+    } catch (error) {
+        console.error('Erreur lors de la réinitialisation des votes:', error);
+        throw new Error('Impossible de réinitialiser les votes');
     }
 };
