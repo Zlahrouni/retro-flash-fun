@@ -791,6 +791,7 @@ const Retro = () => {
                   isMaster={isMaster}
                   retroId={displayId}
                   isOnlineMode={!!boardData}
+                  columns={columns}
               />
             </TabsContent>
           </Tabs>

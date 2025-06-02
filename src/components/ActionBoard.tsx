@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp, Target, Plus, ExternalLink, UserCheck, Users, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Target, Plus, ExternalLink, UserCheck, Users, Trash2, FileDown } from "lucide-react";
 import ActionAssignment from "./ActionAssignment";
+import ExportPDF from "./ExportPDF";
 import { ActionData, subscribeToActions, deleteAction as deleteActionService, updateActionAssignment } from "@/services/actionsService";
 import { toast } from "@/hooks/use-toast";
 
@@ -25,12 +26,28 @@ interface BoardData {
     actionCreationEnabled: boolean;
 }
 
+interface RetroCardData {
+    id: string;
+    text: string;
+    author: string;
+    votes: number;
+    hasVoted: boolean;
+    highlighted?: boolean;
+}
+
+interface Column {
+    id: string;
+    title: string;
+    cards: RetroCardData[];
+}
+
 interface ActionBoardProps {
     boardData: BoardData | null;
     currentUsername: string;
     isMaster: boolean;
     retroId: string;
-    isOnlineMode?: boolean; // NOUVEAU PROP pour détecter si on est en ligne
+    isOnlineMode?: boolean;
+    columns?: Column[]; // NOUVEAU PROP pour les données des colonnes
 }
 
 const ActionBoard = ({
@@ -38,7 +55,8 @@ const ActionBoard = ({
                          currentUsername,
                          isMaster,
                          retroId,
-                         isOnlineMode = false // NOUVEAU PROP avec valeur par défaut
+                         isOnlineMode = false,
+                         columns = [] // NOUVEAU PROP avec valeur par défaut
                      }: ActionBoardProps) => {
     const [actions, setActions] = useState<ActionData[]>([]);
     const [expandedActions, setExpandedActions] = useState<Set<string>>(new Set());
@@ -150,7 +168,7 @@ const ActionBoard = ({
 
     // Obtenir les participants pour l'assignation
     const participants = boardData ? boardData.participants : [currentUsername];
-    console.log("Participants:", boardData?.participants);
+
     if (loading) {
         return (
             <div className="space-y-6">
@@ -164,23 +182,84 @@ const ActionBoard = ({
 
     return (
         <div className="space-y-6">
-            {/* En-tête avec statistiques */}
-
-
-            {/* Titre et informations */}
-            <div className="flex justify-between items-center">
+            {/* En-tête avec titre, informations et bouton export */}
+            <div className="flex justify-between items-start">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Plan d'Actions</h2>
                     <p className="text-gray-600 mt-1">
                         Actions créées depuis les cartes en évidence de votre rétrospective
                     </p>
                 </div>
-                {boardData?.actionCreationEnabled && (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                        Création d'actions activée
-                    </Badge>
-                )}
+
+                <div className="flex items-center space-x-3">
+                    {boardData?.actionCreationEnabled && (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            Création d'actions activée
+                        </Badge>
+                    )}
+
+                    {/* Bouton d'export PDF */}
+                    <ExportPDF
+                        boardData={boardData}
+                        columns={columns}
+                        actions={actions}
+                        retroId={retroId}
+                    />
+                </div>
             </div>
+
+            {/* Statistiques rapides */}
+            {actions.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-green-200">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Total actions</p>
+                                <p className="text-2xl font-bold text-green-600">{stats.total}</p>
+                            </div>
+                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                                <Target className="w-4 h-4 text-green-600" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-200">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Depuis cartes</p>
+                                <p className="text-2xl font-bold text-blue-600">{stats.fromCards}</p>
+                            </div>
+                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <span className="text-blue-600 text-sm">📝</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-200">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Assignées</p>
+                                <p className="text-2xl font-bold text-purple-600">{stats.assigned}</p>
+                            </div>
+                            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <UserCheck className="w-4 h-4 text-purple-600" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-orange-200">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Mes actions</p>
+                                <p className="text-2xl font-bold text-orange-600">{stats.assignedToMe}</p>
+                            </div>
+                            <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                                <span className="text-orange-600 text-sm">👤</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Message d'information si la création d'actions est désactivée */}
             {!boardData?.actionCreationEnabled && (
@@ -217,6 +296,19 @@ const ActionBoard = ({
                                     : "Les actions apparaîtront ici une fois que l'administrateur aura activé la création d'actions."
                                 }
                             </p>
+                            {actions.length === 0 && columns.length > 0 && (
+                                <div className="mt-4">
+                                    <ExportPDF
+                                        boardData={boardData}
+                                        columns={columns}
+                                        actions={actions}
+                                        retroId={retroId}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        Vous pouvez toujours exporter un rapport même sans actions
+                                    </p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 ) : (
@@ -268,9 +360,6 @@ const ActionBoard = ({
                                         )}
 
                                         <div className="flex items-center space-x-6 text-sm text-gray-500 mb-3">
-                                            <div className="flex items-center space-x-1">
-                                                <span>Créée par {action.createdBy}</span>
-                                            </div>
                                             <div className="flex items-center space-x-1">
                                                 <span>{action.createdAt.toDate().toLocaleDateString('fr-FR')}</span>
                                             </div>
@@ -343,7 +432,6 @@ const ActionBoard = ({
                                                                     "{action.sourceCard.text}"
                                                                 </p>
                                                                 <div className="flex items-center space-x-4 text-xs text-blue-600">
-                                                                    <span>Par {action.sourceCard.author}</span>
                                                                     <span>{action.sourceCard.votes} vote(s)</span>
                                                                 </div>
                                                             </div>
@@ -399,6 +487,7 @@ const ActionBoard = ({
                             <p className="text-sm text-gray-600">
                                 Les actions créées depuis les cartes gardent une référence vers la carte originale.
                                 Cela permet de tracer l'origine de chaque action et de maintenir le contexte de la rétrospective.
+                                Utilisez le bouton "Export PDF" pour générer un rapport complet avec toutes les actions et leur assignation.
                             </p>
                         </div>
                     </div>
