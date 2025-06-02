@@ -64,7 +64,7 @@ const RetroCard = ({
                                 </div>
                             </div>
                         )}
-                        <p className="text-sm text-gray-800 leading-relaxed">{card.text}</p>
+                        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{card.text}</p>
                     </div>
 
                     <div className="flex items-center justify-between">

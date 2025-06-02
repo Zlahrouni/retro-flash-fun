@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Lock } from "lucide-react";
 import RetroCard from "./RetroCard";
+import {Textarea} from "@/components/ui/textarea.tsx";
 
 interface RetroCardData {
     id: string;
@@ -28,8 +29,7 @@ interface RetroColumnProps {
     onDeleteCard: (columnId: string, cardId: string) => void;
     onVoteCard: (columnId: string, cardId: string) => void;
     onHighlightCard?: (columnId: string, cardId: string) => void;
-    onCreateAction?: (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => void;
-    cardsVisible: boolean;
+    onCreateAction?: (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => Promise<void>;    cardsVisible: boolean;
     votingEnabled: boolean;
     addingDisabled: boolean;
     currentUsername: string;
@@ -68,7 +68,8 @@ const RetroColumn = ({
     };
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter") {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
             handleAddCard();
         } else if (e.key === "Escape") {
             setIsAdding(false);
@@ -115,8 +116,7 @@ const RetroColumn = ({
                         onDelete={() => onDeleteCard(column.id, card.id)}
                         onVote={() => onVoteCard(column.id, card.id)}
                         onHighlight={onHighlightCard ? () => onHighlightCard(column.id, card.id) : undefined}
-                        onCreateAction={onCreateAction ? (actionTitle, actionDescription, sourceCardId, sourceCardText) =>
-                            onCreateAction(actionTitle, actionDescription, sourceCardId, sourceCardText) : undefined}
+                        onCreateAction={onCreateAction}
                         votingEnabled={votingEnabled}
                         currentUsername={currentUsername}
                         canVote={userCanVote || card.hasVoted}
@@ -152,12 +152,13 @@ const RetroColumn = ({
                     <div className="mt-4">
                         {isAdding ? (
                             <div className="space-y-2">
-                                <Input
+                                <Textarea
                                     value={newCardText}
                                     onChange={(e) => setNewCardText(e.target.value)}
                                     onKeyDown={handleKeyPress}
                                     placeholder="Tapez votre idée..."
-                                    className="text-sm"
+                                    className="text-sm resize-none"
+                                    rows={2}
                                     autoFocus
                                 />
                                 <div className="flex space-x-2">
