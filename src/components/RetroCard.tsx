@@ -18,13 +18,13 @@ interface RetroCardProps {
     onDelete: () => void;
     onVote: () => void;
     onHighlight?: () => void;
-    onCreateAction?: (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => void;
+    onCreateAction?: (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => Promise<void>;
     votingEnabled: boolean;
     currentUsername: string;
     canVote?: boolean;
     isMaster?: boolean;
     showHighlightButton?: boolean;
-    showActionButton?: boolean; // NOUVEAU PROP
+    showActionButton?: boolean;
 }
 
 const RetroCard = ({
@@ -113,7 +113,7 @@ const RetroCard = ({
                         </div>
 
                         <div className="flex items-center space-x-1">
-                            {/* NOUVEAU : Bouton de création d'action */}
+                            {/* Bouton de création d'action - SEULEMENT pour les cartes en évidence */}
                             {canCreateAction && (
                                 <ActionFromCard
                                     card={card}
@@ -121,6 +121,7 @@ const RetroCard = ({
                                 />
                             )}
 
+                            {/* Bouton de mise en évidence - SEULEMENT pour l'admin */}
                             {canHighlight && (
                                 <Button
                                     size="sm"
@@ -144,6 +145,7 @@ const RetroCard = ({
                                 </Button>
                             )}
 
+                            {/* Bouton de suppression - SEULEMENT pour l'auteur */}
                             {canDelete && (
                                 <Button
                                     size="sm"
@@ -158,6 +160,7 @@ const RetroCard = ({
                         </div>
                     </div>
 
+                    {/* Badge "En évidence" pour les cartes mises en évidence */}
                     {card.highlighted && (
                         <div className="flex items-center justify-center mt-2">
                             <div className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex items-center space-x-1 border border-yellow-300">

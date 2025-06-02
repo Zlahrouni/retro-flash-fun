@@ -20,6 +20,7 @@ import {
   filterNotesByHighlight,
   NoteData
 } from "@/services/notesService";
+import { createAction } from "@/services/actionsService";
 
 interface RetroCardData {
   id: string;
@@ -35,20 +36,6 @@ interface Column {
   title: string;
   color: string;
   cards: RetroCardData[];
-}
-
-interface ActionItem {
-  id: string;
-  title: string;
-  description: string;
-  createdBy: string;
-  createdAt: string;
-  sourceCard?: {
-    id: string;
-    text: string;
-    author: string;
-    votes: number;
-  };
 }
 
 const Retro = () => {
@@ -69,9 +56,6 @@ const Retro = () => {
   const [isMaster, setIsMaster] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
   const [activeTab, setActiveTab] = useState("retro-board");
-
-  // État pour les actions
-  const [actions, setActions] = useState<ActionItem[]>([]);
 
   // Fonction pour créer les colonnes par défaut à partir des données du board
   const createColumnsFromBoardData = (boardData: BoardData): Column[] => {
@@ -129,8 +113,17 @@ const Retro = () => {
   };
 
   // Fonction pour créer une action depuis une carte
-  // Fonction pour créer une action depuis une carte
-  const createActionFromCard = (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => {
+  const createActionFromCard = async (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => {
+    if (!retroId || !boardData) {
+      // Mode hors ligne - afficher un message d'information
+      toast({
+        title: "Mode hors ligne",
+        description: "La création d'actions n'est disponible qu'en mode en ligne.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Trouver les détails de la carte source
     let sourceCardAuthor = "";
     let sourceCardVotes = 0;
@@ -145,26 +138,32 @@ const Retro = () => {
       }
     }
 
-    const newAction: ActionItem = {
-      id: Date.now().toString(),
-      title: actionTitle,
-      description: actionDescription,
-      createdBy: currentUsername,
-      createdAt: new Date().toISOString().split('T')[0],
-      sourceCard: {
-        id: sourceCardId,
-        text: sourceCardText,
-        author: sourceCardAuthor,
-        votes: sourceCardVotes
-      }
-    };
+    try {
+      await createAction({
+        boardId: retroId,
+        title: actionTitle,
+        description: actionDescription,
+        createdBy: currentUsername,
+        sourceCard: {
+          id: sourceCardId,
+          text: sourceCardText,
+          author: sourceCardAuthor,
+          votes: sourceCardVotes
+        }
+      });
 
-    setActions(prev => [...prev, newAction]);
-
-    toast({
-      title: "Action créée",
-      description: "L'action a été créée avec succès depuis la carte en évidence.",
-    });
+      toast({
+        title: "Action créée",
+        description: "L'action a été créée avec succès et est visible par tous les participants.",
+      });
+    } catch (error) {
+      console.error("Erreur lors de la création de l'action:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer l'action. Veuillez réessayer.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Charger les données du board et s'abonner aux notes
@@ -687,10 +686,10 @@ const Retro = () => {
                     )}
 
                     {/* Informations sur les actions */}
-                    {actions.length > 0 && activeTab === "actions" && (
+                    {boardData?.actionCreationEnabled && (
                         <div className="flex items-center space-x-1">
                           <span className="text-green-600 font-medium">
-                            🎯 {actions.length} action(s) créée(s)
+                            🎯 Actions activées
                           </span>
                         </div>
                     )}
@@ -791,8 +790,7 @@ const Retro = () => {
                   currentUsername={currentUsername}
                   isMaster={isMaster}
                   retroId={displayId}
-                  actions={actions}
-                  onDeleteAction={(actionId) => setActions(prev => prev.filter(a => a.id !== actionId))}
+                  isOnlineMode={!!boardData}
               />
             </TabsContent>
           </Tabs>
