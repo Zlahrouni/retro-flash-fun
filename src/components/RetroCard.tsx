@@ -1,7 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Heart, Trash2, Star } from "lucide-react";
+import { Heart, Trash2, Star, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ActionFromCard from "./ActionFromCard";
 
 interface RetroCardData {
     id: string;
@@ -9,19 +10,21 @@ interface RetroCardData {
     author: string;
     votes: number;
     hasVoted: boolean;
-    highlighted?: boolean; // Nouveau champ pour la mise en évidence
+    highlighted?: boolean;
 }
 
 interface RetroCardProps {
     card: RetroCardData;
     onDelete: () => void;
     onVote: () => void;
-    onHighlight?: () => void; // Nouvelle fonction pour la mise en évidence
+    onHighlight?: () => void;
+    onCreateAction?: (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => void;
     votingEnabled: boolean;
     currentUsername: string;
-    canVote?: boolean; // Indique si l'utilisateur peut encore voter (limite non atteinte)
-    isMaster?: boolean; // Indique si l'utilisateur est admin
-    showHighlightButton?: boolean; // Contrôle l'affichage du bouton de mise en évidence
+    canVote?: boolean;
+    isMaster?: boolean;
+    showHighlightButton?: boolean;
+    showActionButton?: boolean; // NOUVEAU PROP
 }
 
 const RetroCard = ({
@@ -29,25 +32,22 @@ const RetroCard = ({
                        onDelete,
                        onVote,
                        onHighlight,
+                       onCreateAction,
                        votingEnabled,
                        currentUsername,
                        canVote = true,
                        isMaster = false,
-                       showHighlightButton = false
+                       showHighlightButton = false,
+                       showActionButton = false
                    }: RetroCardProps) => {
-    // Vérification de sécurité pour éviter les erreurs
     if (!card) {
         return null;
     }
 
-    // Détermine si l'utilisateur peut supprimer cette carte
     const canDelete = card.author === currentUsername;
-
-    // Détermine si l'utilisateur peut voter sur cette carte
     const canVoteOnCard = votingEnabled && (card.hasVoted || canVote);
-
-    // Détermine si l'utilisateur peut mettre en évidence cette carte
     const canHighlight = isMaster && showHighlightButton && onHighlight;
+    const canCreateAction = card.highlighted && showActionButton && onCreateAction; // SEULEMENT POUR LES CARTES EN ÉVIDENCE
 
     return (
         <Card className={cn(
@@ -56,7 +56,6 @@ const RetroCard = ({
         )}>
             <CardContent className="p-3">
                 <div className="space-y-2">
-                    {/* Contenu de la carte avec indicateur de mise en évidence */}
                     <div className="relative">
                         {card.highlighted && (
                             <div className="absolute -top-1 -right-1">
@@ -72,7 +71,6 @@ const RetroCard = ({
                         <div className="flex items-center space-x-2">
                             <span className="text-xs text-gray-500 font-medium">{card.author}</span>
 
-                            {/* Affichage des votes */}
                             {votingEnabled ? (
                                 <Button
                                     size="sm"
@@ -105,7 +103,6 @@ const RetroCard = ({
                                     <span className="text-xs font-medium">{card.votes}</span>
                                 </Button>
                             ) : (
-                                // Affichage des votes en lecture seule quand le vote est désactivé
                                 card.votes > 0 && (
                                     <div className="flex items-center space-x-1 text-gray-500">
                                         <Heart className="w-3 h-3" />
@@ -115,9 +112,15 @@ const RetroCard = ({
                             )}
                         </div>
 
-                        {/* Boutons d'action */}
                         <div className="flex items-center space-x-1">
-                            {/* Bouton de mise en évidence - visible seulement pour l'admin */}
+                            {/* NOUVEAU : Bouton de création d'action */}
+                            {canCreateAction && (
+                                <ActionFromCard
+                                    card={card}
+                                    onCreateAction={onCreateAction}
+                                />
+                            )}
+
                             {canHighlight && (
                                 <Button
                                     size="sm"
@@ -141,7 +144,6 @@ const RetroCard = ({
                                 </Button>
                             )}
 
-                            {/* Bouton de suppression - visible seulement pour l'auteur */}
                             {canDelete && (
                                 <Button
                                     size="sm"
@@ -156,7 +158,6 @@ const RetroCard = ({
                         </div>
                     </div>
 
-                    {/* Badge de mise en évidence (visible en permanence si la carte est mise en évidence) */}
                     {card.highlighted && (
                         <div className="flex items-center justify-center mt-2">
                             <div className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full flex items-center space-x-1 border border-yellow-300">

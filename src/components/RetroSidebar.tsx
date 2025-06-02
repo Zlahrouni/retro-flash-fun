@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Trash2, Eye, Users, Plus, Vote, Crown, Settings as SettingsIcon, Save, AlertTriangle, RotateCcw, Star, Sparkles } from "lucide-react";
+import { Trash2, Eye, Users, Plus, Vote, Crown, Settings as SettingsIcon, Save, AlertTriangle, RotateCcw, Star, Sparkles, Target } from "lucide-react";
 import { closeBoardPermanently, updateBoardSettings, BoardData } from "@/services/boardService";
 import { resetAllVotes, resetAllHighlights } from "@/services/notesService";
 import { toast } from "@/hooks/use-toast";
@@ -39,19 +39,20 @@ const RetroSidebar = ({
   const [localShowOthersCards, setLocalShowOthersCards] = useState(true);
   const [localAddingCardsDisabled, setLocalAddingCardsDisabled] = useState(false);
   const [localMaxVotesPerPerson, setLocalMaxVotesPerPerson] = useState(3);
-  const [localShowOnlyHighlighted, setLocalShowOnlyHighlighted] = useState(false); // Nouveau paramètre
+  const [localShowOnlyHighlighted, setLocalShowOnlyHighlighted] = useState(false);
+  const [localActionCreationEnabled, setLocalActionCreationEnabled] = useState(false); // NOUVEAU
 
   // États pour les dialogues
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showResetVotesDialog, setShowResetVotesDialog] = useState(false);
-  const [showResetHighlightsDialog, setShowResetHighlightsDialog] = useState(false); // Nouveau dialogue
+  const [showResetHighlightsDialog, setShowResetHighlightsDialog] = useState(false);
 
   // État pour le suivi des modifications
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isResettingVotes, setIsResettingVotes] = useState(false);
-  const [isResettingHighlights, setIsResettingHighlights] = useState(false); // Nouvel état
+  const [isResettingHighlights, setIsResettingHighlights] = useState(false);
 
   // Initialiser les valeurs locales quand boardData change
   useEffect(() => {
@@ -60,7 +61,8 @@ const RetroSidebar = ({
       setLocalShowOthersCards(!boardData.hideCardsFromOthers);
       setLocalAddingCardsDisabled(boardData.addingCardsDisabled);
       setLocalMaxVotesPerPerson(boardData.votesPerParticipant);
-      setLocalShowOnlyHighlighted(boardData.showOnlyHighlighted || false); // Nouveau champ
+      setLocalShowOnlyHighlighted(boardData.showOnlyHighlighted || false);
+      setLocalActionCreationEnabled(boardData.actionCreationEnabled || false); // NOUVEAU
       setHasUnsavedChanges(false);
     }
   }, [boardData]);
@@ -71,7 +73,8 @@ const RetroSidebar = ({
       showOthersCards: boolean,
       addingCardsDisabled: boolean,
       maxVotes: number,
-      showOnlyHighlighted: boolean // Nouveau paramètre
+      showOnlyHighlighted: boolean,
+      actionCreationEnabled: boolean // NOUVEAU PARAMÈTRE
   ) => {
     if (!boardData) return false;
 
@@ -80,36 +83,42 @@ const RetroSidebar = ({
         showOthersCards !== !boardData.hideCardsFromOthers ||
         addingCardsDisabled !== boardData.addingCardsDisabled ||
         maxVotes !== boardData.votesPerParticipant ||
-        showOnlyHighlighted !== (boardData.showOnlyHighlighted || false) // Nouveau check
+        showOnlyHighlighted !== (boardData.showOnlyHighlighted || false) ||
+        actionCreationEnabled !== (boardData.actionCreationEnabled || false) // NOUVEAU CHECK
     );
   };
 
   // Gestionnaires de changements avec détection
   const handleVotingChange = (enabled: boolean) => {
     setLocalVotingEnabled(enabled);
-    setHasUnsavedChanges(checkForChanges(enabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, localShowOnlyHighlighted));
+    setHasUnsavedChanges(checkForChanges(enabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, localShowOnlyHighlighted, localActionCreationEnabled));
   };
 
   const handleVisibilityChange = (show: boolean) => {
     setLocalShowOthersCards(show);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, show, localAddingCardsDisabled, localMaxVotesPerPerson, localShowOnlyHighlighted));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, show, localAddingCardsDisabled, localMaxVotesPerPerson, localShowOnlyHighlighted, localActionCreationEnabled));
   };
 
   const handleAddingCardsChange = (disabled: boolean) => {
     setLocalAddingCardsDisabled(disabled);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, disabled, localMaxVotesPerPerson, localShowOnlyHighlighted));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, disabled, localMaxVotesPerPerson, localShowOnlyHighlighted, localActionCreationEnabled));
   };
 
   const handleMaxVotesChange = (max: number) => {
     if (max < 1 || max > 20) return;
     setLocalMaxVotesPerPerson(max);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, max, localShowOnlyHighlighted));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, max, localShowOnlyHighlighted, localActionCreationEnabled));
   };
 
-  // Nouveau gestionnaire pour les cartes en évidence
   const handleShowOnlyHighlightedChange = (show: boolean) => {
     setLocalShowOnlyHighlighted(show);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, show));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, show, localActionCreationEnabled));
+  };
+
+  // NOUVEAU gestionnaire pour la création d'actions
+  const handleActionCreationChange = (enabled: boolean) => {
+    setLocalActionCreationEnabled(enabled);
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, localShowOnlyHighlighted, enabled));
   };
 
   // Fonction de sauvegarde
@@ -127,7 +136,8 @@ const RetroSidebar = ({
         hideCardsFromOthers: !localShowOthersCards,
         votesPerParticipant: localMaxVotesPerPerson,
         addingCardsDisabled: localAddingCardsDisabled,
-        showOnlyHighlighted: localShowOnlyHighlighted // Nouveau paramètre
+        showOnlyHighlighted: localShowOnlyHighlighted,
+        actionCreationEnabled: localActionCreationEnabled // NOUVEAU PARAMÈTRE
       });
 
       setHasUnsavedChanges(false);
@@ -158,6 +168,7 @@ const RetroSidebar = ({
       setLocalAddingCardsDisabled(boardData.addingCardsDisabled);
       setLocalMaxVotesPerPerson(boardData.votesPerParticipant);
       setLocalShowOnlyHighlighted(boardData.showOnlyHighlighted || false);
+      setLocalActionCreationEnabled(boardData.actionCreationEnabled || false); // NOUVEAU
       setHasUnsavedChanges(false);
     }
   };
@@ -221,7 +232,7 @@ const RetroSidebar = ({
     }
   };
 
-  // Nouvelle fonction de réinitialisation des mises en évidence
+  // Fonction de réinitialisation des mises en évidence
   const handleResetHighlights = async () => {
     if (!isOnlineMode || retroId === "local") {
       toast({
@@ -324,6 +335,14 @@ const RetroSidebar = ({
                     <span className="text-sm text-gray-600">Mode d'affichage</span>
                     <span className={`text-sm font-medium ${boardData?.showOnlyHighlighted ? 'text-yellow-600' : 'text-green-600'}`}>
                     {boardData?.showOnlyHighlighted ? 'Cartes en évidence uniquement' : 'Toutes les cartes'}
+                  </span>
+                  </div>
+
+                  {/* NOUVEAU : Affichage du statut de création d'actions */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Création d'actions</span>
+                    <span className={`text-sm font-medium ${boardData?.actionCreationEnabled ? 'text-green-600' : 'text-gray-500'}`}>
+                    {boardData?.actionCreationEnabled ? 'Activée' : 'Désactivée'}
                   </span>
                   </div>
                 </div>
@@ -515,7 +534,7 @@ const RetroSidebar = ({
 
             <Separator />
 
-            {/* Nouvelle section : Mise en évidence des cartes */}
+            {/* Mise en évidence des cartes */}
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
                 <Star className="w-5 h-5 text-yellow-600" />
@@ -585,6 +604,43 @@ const RetroSidebar = ({
                 <p className="text-xs text-yellow-700">
                   En tant qu'administrateur, vous pouvez cliquer sur l'icône étoile ⭐ des cartes pour les mettre en évidence.
                   Activez ensuite le filtre ci-dessus pour ne montrer que les cartes importantes à tous les participants.
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* NOUVELLE SECTION : Création d'actions */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Target className="w-5 h-5 text-green-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Création d'Actions</h3>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="action-creation-enabled" className="text-sm font-medium">
+                    Activer la création d'actions
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    Permet de créer des actions à partir des cartes en évidence
+                  </p>
+                </div>
+                <Switch
+                    id="action-creation-enabled"
+                    checked={localActionCreationEnabled}
+                    onCheckedChange={handleActionCreationChange}
+                />
+              </div>
+
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Target className="w-4 h-4 text-green-600" />
+                  <h5 className="text-sm font-medium text-green-800">Comment ça marche</h5>
+                </div>
+                <p className="text-xs text-green-700">
+                  Quand cette option est activée, un bouton "Créer une action" 🎯 apparaît sur toutes les cartes
+                  en évidence. Cliquez dessus pour transformer une carte en action concrète dans l'onglet Actions.
                 </p>
               </div>
             </div>
@@ -765,6 +821,7 @@ const RetroSidebar = ({
                     <div>• Visibilité : {localShowOthersCards ? 'Toutes les cartes visibles' : 'Cartes personnelles uniquement'}</div>
                     <div>• Ajout de cartes : {localAddingCardsDisabled ? 'Désactivé' : 'Autorisé'}</div>
                     <div>• Affichage : {localShowOnlyHighlighted ? 'Cartes en évidence uniquement' : 'Toutes les cartes'}</div>
+                    <div>• Création d'actions : {localActionCreationEnabled ? 'Activée' : 'Désactivée'}</div>
                   </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>

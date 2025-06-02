@@ -6,7 +6,7 @@ interface RetroCardData {
     author: string;
     votes: number;
     hasVoted: boolean;
-    highlighted?: boolean; // Nouveau champ pour la mise en évidence
+    highlighted?: boolean;
 }
 
 interface Column {
@@ -26,7 +26,8 @@ interface BoardData {
     votingEnabled: boolean;
     votesPerParticipant: number;
     addingCardsDisabled: boolean;
-    showOnlyHighlighted?: boolean; // Nouveau champ
+    showOnlyHighlighted?: boolean;
+    actionCreationEnabled?: boolean;
 }
 
 interface RetroBoardProps {
@@ -39,10 +40,12 @@ interface RetroBoardProps {
     onAddCard: (columnId: string, text: string) => void;
     onDeleteCard: (columnId: string, cardId: string) => void;
     onVoteCard: (columnId: string, cardId: string) => void;
-    onHighlightCard?: (columnId: string, cardId: string) => void; // Nouvelle fonction
+    onHighlightCard?: (columnId: string, cardId: string) => void;
+    onCreateAction?: (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => void;
     getFilteredCards: (cards: RetroCardData[]) => RetroCardData[];
-    isMaster?: boolean; // Nouveau prop
-    showHighlightButtons?: boolean; // Nouveau prop
+    isMaster?: boolean;
+    showHighlightButtons?: boolean;
+    showActionButtons?: boolean;
 }
 
 const RetroBoard = ({
@@ -56,9 +59,11 @@ const RetroBoard = ({
                         onDeleteCard,
                         onVoteCard,
                         onHighlightCard,
+                        onCreateAction,
                         getFilteredCards,
                         isMaster = false,
-                        showHighlightButtons = false
+                        showHighlightButtons = false,
+                        showActionButtons = false
                     }: RetroBoardProps) => {
     if (columns.length === 0) {
         return (
@@ -99,7 +104,7 @@ const RetroBoard = ({
         <div className="space-y-6">
             {/* Statistiques rapides */}
             {isMaster && (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-blue-200">
                         <div className="flex items-center justify-between">
                             <div>
@@ -111,18 +116,6 @@ const RetroBoard = ({
                             </div>
                         </div>
                     </div>
-
-                    {/*<div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-green-200">*/}
-                    {/*    <div className="flex items-center justify-between">*/}
-                    {/*        <div>*/}
-                    {/*            <p className="text-sm font-medium text-gray-600">Mes cartes</p>*/}
-                    {/*            <p className="text-2xl font-bold text-green-600">{myCards}</p>*/}
-                    {/*        </div>*/}
-                    {/*        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">*/}
-                    {/*            <span className="text-green-600 text-sm">👤</span>*/}
-                    {/*        </div>*/}
-                    {/*    </div>*/}
-                    {/*</div>*/}
 
                     <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-purple-200">
                         <div className="flex items-center justify-between">
@@ -136,22 +129,6 @@ const RetroBoard = ({
                         </div>
                     </div>
 
-                    {/*<div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-orange-200">*/}
-                    {/*    <div className="flex items-center justify-between">*/}
-                    {/*        <div>*/}
-                    {/*            <p className="text-sm font-medium text-gray-600">Mes votes</p>*/}
-                    {/*            <p className="text-2xl font-bold text-orange-600">*/}
-                    {/*                {myVotes}*/}
-                    {/*                <span className="text-sm text-gray-500">/{boardData?.votesPerParticipant || 3}</span>*/}
-                    {/*            </p>*/}
-                    {/*        </div>*/}
-                    {/*        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">*/}
-                    {/*            <span className="text-orange-600 text-sm">🗳️</span>*/}
-                    {/*        </div>*/}
-                    {/*    </div>*/}
-                    {/*</div>*/}
-
-                    {/* Nouvelle statistique pour les cartes en évidence */}
                     <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-yellow-200">
                         <div className="flex items-center justify-between">
                             <div>
@@ -180,7 +157,6 @@ const RetroBoard = ({
                     </div>
                 </div>
             )}
-
 
             {isVotingEnabled && userVotesRemaining === 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
@@ -226,6 +202,22 @@ const RetroBoard = ({
                 </div>
             )}
 
+            {/* Message d'information sur la création d'actions */}
+            {boardData?.actionCreationEnabled && isMaster && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center space-x-2">
+                        <span className="text-green-600">🎯</span>
+                        <div>
+                            <h4 className="text-sm font-medium text-green-800">Création d'actions activée</h4>
+                            <p className="text-sm text-green-700">
+                                Les participants peuvent maintenant créer des actions à partir des cartes en évidence.
+                                Un bouton 🎯 apparaît sur toutes les cartes mises en évidence.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Message si aucune carte n'est visible en mode mise en évidence */}
             {boardData?.showOnlyHighlighted && totalCards === 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
@@ -253,6 +245,7 @@ const RetroBoard = ({
                         onDeleteCard={onDeleteCard}
                         onVoteCard={onVoteCard}
                         onHighlightCard={onHighlightCard}
+                        onCreateAction={onCreateAction}
                         cardsVisible={cardsVisible}
                         votingEnabled={isVotingEnabled}
                         addingDisabled={boardData ? boardData.addingCardsDisabled : false}
@@ -260,6 +253,7 @@ const RetroBoard = ({
                         userCanVote={userVotesRemaining > 0}
                         isMaster={isMaster}
                         showHighlightButtons={showHighlightButtons}
+                        showActionButtons={showActionButtons}
                     />
                 ))}
             </div>
@@ -287,15 +281,27 @@ const RetroBoard = ({
                     })}
                 </div>
 
-                {/* Information sur la mise en évidence pour les admins */}
-                {isMaster && showHighlightButtons && (
+                {/* Information sur la mise en évidence et les actions pour les admins */}
+                {isMaster && (showHighlightButtons || showActionButtons) && (
                     <div className="mt-4 pt-3 border-t border-gray-200">
-                        <h5 className="text-sm font-semibold text-gray-800 mb-2">⭐ Mise en évidence des cartes</h5>
-                        <p className="text-xs text-gray-600">
-                            En tant qu'administrateur, vous pouvez mettre en évidence les cartes importantes en cliquant sur l'icône étoile ⭐.
-                            Les cartes mises en évidence apparaissent avec un contour doré et sont triées en premier.
-                            Utilisez les paramètres pour n'afficher que les cartes en évidence à tous les participants.
-                        </p>
+                        {showHighlightButtons && (
+                            <div className="mb-3">
+                                <h5 className="text-sm font-semibold text-gray-800 mb-2">⭐ Mise en évidence des cartes</h5>
+                                <p className="text-xs text-gray-600">
+                                    En tant qu'administrateur, vous pouvez mettre en évidence les cartes importantes en cliquant sur l'icône étoile ⭐.
+                                    Les cartes mises en évidence apparaissent avec un contour doré et sont triées en premier.
+                                </p>
+                            </div>
+                        )}
+                        {showActionButtons && (
+                            <div>
+                                <h5 className="text-sm font-semibold text-gray-800 mb-2">🎯 Création d'actions</h5>
+                                <p className="text-xs text-gray-600">
+                                    Cliquez sur l'icône cible 🎯 des cartes en évidence pour créer des actions concrètes.
+                                    Ces actions seront visibles dans l'onglet "Actions" avec une référence à la carte d'origine.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

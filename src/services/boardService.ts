@@ -21,7 +21,8 @@ export interface BoardData {
     votingEnabled: boolean;
     votesPerParticipant: number;
     addingCardsDisabled: boolean;
-    showOnlyHighlighted: boolean; // Nouveau champ pour l'affichage des cartes en évidence
+    showOnlyHighlighted: boolean;
+    actionCreationEnabled: boolean; // NOUVEAU CHAMP
     participants: string[];
 }
 
@@ -38,7 +39,8 @@ export interface UpdateBoardSettingsParams {
     votingEnabled?: boolean;
     votesPerParticipant?: number;
     addingCardsDisabled?: boolean;
-    showOnlyHighlighted?: boolean; // Nouveau paramètre
+    showOnlyHighlighted?: boolean;
+    actionCreationEnabled?: boolean; // NOUVEAU PARAMÈTRE
 }
 
 // Génère un ID unique alphanumérique de 6 caractères maximum
@@ -67,6 +69,7 @@ export const createBoard = async (params: CreateBoardParams): Promise<string> =>
         votesPerParticipant: 3, // Par défaut, 3 votes maximum
         addingCardsDisabled: false, // Par défaut, ajout de cartes autorisé
         showOnlyHighlighted: false, // Par défaut, afficher toutes les cartes
+        actionCreationEnabled: false, // Par défaut, création d'actions désactivée
         participants: [params.username]
     };
 
@@ -92,6 +95,7 @@ export const getBoard = async (boardId: string): Promise<BoardData | null> => {
             return {
                 addingCardsDisabled: false, // Valeur par défaut
                 showOnlyHighlighted: false, // Valeur par défaut
+                actionCreationEnabled: false, // Valeur par défaut pour la compatibilité
                 ...data
             } as BoardData;
         } else {
@@ -136,7 +140,7 @@ export const addParticipantToBoard = async (boardId: string, username: string): 
     }
 };
 
-// Met à jour les paramètres du board (fonction améliorée)
+// Met à jour les paramètres du board
 export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Promise<void> => {
     try {
         const docRef = doc(db, 'boards', params.boardId);
@@ -177,6 +181,11 @@ export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Pr
 
         if (params.showOnlyHighlighted !== undefined) {
             updates.showOnlyHighlighted = params.showOnlyHighlighted;
+        }
+
+        // NOUVEAU PARAMÈTRE
+        if (params.actionCreationEnabled !== undefined) {
+            updates.actionCreationEnabled = params.actionCreationEnabled;
         }
 
         // Effectuer la mise à jour
@@ -229,6 +238,7 @@ export const subscribeToBoardUpdates = (
                 const boardData: BoardData = {
                     addingCardsDisabled: false, // Valeur par défaut
                     showOnlyHighlighted: false, // Valeur par défaut
+                    actionCreationEnabled: false, // Valeur par défaut pour la compatibilité
                     ...data
                 } as BoardData;
 

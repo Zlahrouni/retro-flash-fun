@@ -11,7 +11,7 @@ interface RetroCardData {
     author: string;
     votes: number;
     hasVoted: boolean;
-    highlighted?: boolean; // Nouveau champ pour la mise en évidence
+    highlighted?: boolean;
 }
 
 interface Column {
@@ -27,14 +27,16 @@ interface RetroColumnProps {
     onAddCard: (columnId: string, text: string) => void;
     onDeleteCard: (columnId: string, cardId: string) => void;
     onVoteCard: (columnId: string, cardId: string) => void;
-    onHighlightCard?: (columnId: string, cardId: string) => void; // Nouvelle fonction pour la mise en évidence
+    onHighlightCard?: (columnId: string, cardId: string) => void;
+    onCreateAction?: (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => void;
     cardsVisible: boolean;
     votingEnabled: boolean;
     addingDisabled: boolean;
     currentUsername: string;
-    userCanVote?: boolean; // Indique si l'utilisateur peut encore voter
-    isMaster?: boolean; // Indique si l'utilisateur est admin
-    showHighlightButtons?: boolean; // Contrôle l'affichage des boutons de mise en évidence
+    userCanVote?: boolean;
+    isMaster?: boolean;
+    showHighlightButtons?: boolean;
+    showActionButtons?: boolean;
 }
 
 const RetroColumn = ({
@@ -44,13 +46,15 @@ const RetroColumn = ({
                          onDeleteCard,
                          onVoteCard,
                          onHighlightCard,
+                         onCreateAction,
                          cardsVisible,
                          votingEnabled,
                          addingDisabled,
                          currentUsername,
                          userCanVote = true,
                          isMaster = false,
-                         showHighlightButtons = false
+                         showHighlightButtons = false,
+                         showActionButtons = false
                      }: RetroColumnProps) => {
     const [newCardText, setNewCardText] = useState("");
     const [isAdding, setIsAdding] = useState(false);
@@ -111,11 +115,14 @@ const RetroColumn = ({
                         onDelete={() => onDeleteCard(column.id, card.id)}
                         onVote={() => onVoteCard(column.id, card.id)}
                         onHighlight={onHighlightCard ? () => onHighlightCard(column.id, card.id) : undefined}
+                        onCreateAction={onCreateAction ? (actionTitle, actionDescription, sourceCardId, sourceCardText) =>
+                            onCreateAction(actionTitle, actionDescription, sourceCardId, sourceCardText) : undefined}
                         votingEnabled={votingEnabled}
                         currentUsername={currentUsername}
-                        canVote={userCanVote || card.hasVoted} // Peut voter si limite non atteinte OU si déjà voté (pour retirer le vote)
+                        canVote={userCanVote || card.hasVoted}
                         isMaster={isMaster}
                         showHighlightButton={showHighlightButtons}
+                        showActionButton={showActionButtons}
                     />
                 ))}
 

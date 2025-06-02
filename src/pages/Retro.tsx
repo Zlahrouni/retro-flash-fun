@@ -27,7 +27,7 @@ interface RetroCardData {
   author: string;
   votes: number;
   hasVoted: boolean;
-  highlighted?: boolean; // Nouveau champ pour la mise en évidence
+  highlighted?: boolean;
 }
 
 interface Column {
@@ -35,6 +35,20 @@ interface Column {
   title: string;
   color: string;
   cards: RetroCardData[];
+}
+
+interface ActionItem {
+  id: string;
+  title: string;
+  description: string;
+  createdBy: string;
+  createdAt: string;
+  sourceCard?: {
+    id: string;
+    text: string;
+    author: string;
+    votes: number;
+  };
 }
 
 const Retro = () => {
@@ -55,6 +69,9 @@ const Retro = () => {
   const [isMaster, setIsMaster] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
   const [activeTab, setActiveTab] = useState("retro-board");
+
+  // État pour les actions
+  const [actions, setActions] = useState<ActionItem[]>([]);
 
   // Fonction pour créer les colonnes par défaut à partir des données du board
   const createColumnsFromBoardData = (boardData: BoardData): Column[] => {
@@ -101,7 +118,7 @@ const Retro = () => {
           author: note.createdBy,
           votes: note.voteCount,
           hasVoted: note.voters.includes(currentUserId),
-          highlighted: note.highlighted || false // Nouveau champ
+          highlighted: note.highlighted || false
         }))
         .sort((a, b) => {
           // Prioriser les cartes mises en évidence, puis trier par votes
@@ -109,6 +126,45 @@ const Retro = () => {
           if (!a.highlighted && b.highlighted) return 1;
           return b.votes - a.votes;
         });
+  };
+
+  // Fonction pour créer une action depuis une carte
+  // Fonction pour créer une action depuis une carte
+  const createActionFromCard = (actionTitle: string, actionDescription: string, sourceCardId: string, sourceCardText: string) => {
+    // Trouver les détails de la carte source
+    let sourceCardAuthor = "";
+    let sourceCardVotes = 0;
+
+    // Rechercher dans toutes les colonnes pour trouver la carte
+    for (const column of columns) {
+      const card = column.cards.find(c => c.id === sourceCardId);
+      if (card) {
+        sourceCardAuthor = card.author;
+        sourceCardVotes = card.votes;
+        break;
+      }
+    }
+
+    const newAction: ActionItem = {
+      id: Date.now().toString(),
+      title: actionTitle,
+      description: actionDescription,
+      createdBy: currentUsername,
+      createdAt: new Date().toISOString().split('T')[0],
+      sourceCard: {
+        id: sourceCardId,
+        text: sourceCardText,
+        author: sourceCardAuthor,
+        votes: sourceCardVotes
+      }
+    };
+
+    setActions(prev => [...prev, newAction]);
+
+    toast({
+      title: "Action créée",
+      description: "L'action a été créée avec succès depuis la carte en évidence.",
+    });
   };
 
   // Charger les données du board et s'abonner aux notes
@@ -402,7 +458,7 @@ const Retro = () => {
     }
   };
 
-  // Nouvelle fonction pour gérer la mise en évidence des cartes
+  // Fonction pour gérer la mise en évidence des cartes
   const highlightCard = async (columnId: string, cardId: string) => {
     // Vérifier que l'utilisateur est admin
     if (!isMaster) {
@@ -630,6 +686,15 @@ const Retro = () => {
                         </div>
                     )}
 
+                    {/* Informations sur les actions */}
+                    {actions.length > 0 && activeTab === "actions" && (
+                        <div className="flex items-center space-x-1">
+                          <span className="text-green-600 font-medium">
+                            🎯 {actions.length} action(s) créée(s)
+                          </span>
+                        </div>
+                    )}
+
                     {/* Indicateur de filtre actif */}
                     {boardData?.showOnlyHighlighted && (
                         <span className="text-yellow-600 font-medium bg-yellow-100 px-2 py-1 rounded-full text-xs">
@@ -712,9 +777,11 @@ const Retro = () => {
                   onDeleteCard={deleteCard}
                   onVoteCard={voteCard}
                   onHighlightCard={highlightCard}
+                  onCreateAction={createActionFromCard}
                   getFilteredCards={getFilteredCards}
                   isMaster={isMaster}
-                  showHighlightButtons={isMaster && !!boardData} // Afficher les boutons de mise en évidence seulement pour l'admin en mode en ligne
+                  showHighlightButtons={isMaster && !!boardData}
+                  showActionButtons={boardData?.actionCreationEnabled || false}
               />
             </TabsContent>
 
@@ -724,6 +791,8 @@ const Retro = () => {
                   currentUsername={currentUsername}
                   isMaster={isMaster}
                   retroId={displayId}
+                  actions={actions}
+                  onDeleteAction={(actionId) => setActions(prev => prev.filter(a => a.id !== actionId))}
               />
             </TabsContent>
           </Tabs>
