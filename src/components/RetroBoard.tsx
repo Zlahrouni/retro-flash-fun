@@ -38,6 +38,22 @@ interface RetroBoardProps {
     onDeleteCard: (columnId: string, cardId: string) => void;
     onVoteCard: (columnId: string, cardId: string) => void;
     getFilteredCards: (cards: Card[]) => Card[];
+
+    actionsEnabled: boolean;
+    isMaster: boolean;
+    boardParticipants: string[];
+    onDuplicateToActions: (card: Card, columnTitle: string) => void;
+    onCreateDirectAction: (
+        card: Card,
+        columnTitle: string,
+        actionData: {
+            title: string;
+            description?: string;
+            assignedTo: string[];
+            dueDate?: string;
+            priority: 'low' | 'medium' | 'high';
+        }
+    ) => void;
 }
 
 const RetroBoard = ({
@@ -210,6 +226,11 @@ const RetroBoard = ({
                         addingDisabled={boardData ? boardData.addingCardsDisabled : false}
                         currentUsername={currentUsername}
                         userCanVote={userVotesRemaining > 0}
+                        actionsEnabled={actionsEnabled}
+                        isMaster={isMaster}
+                        boardParticipants={boardParticipants}
+                        onDuplicateToActions={onDuplicateToActions}
+                        onCreateDirectAction={onCreateDirectAction}
                     />
                 ))}
             </div>

@@ -74,7 +74,7 @@ const RetroTypeSelection = () => {
         name: boardName.trim(),
         username: username.trim(),
         type: selectedType,
-        columns: retroType.columns
+        columns: retroType.columns,
       });
 
       toast({

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Trash2, Eye, Users, Plus, Vote, Crown, Settings as SettingsIcon, Save, AlertTriangle, RotateCcw } from "lucide-react";
+import { Trash2, Eye, Users, Plus, Vote, Crown, Settings as SettingsIcon, Save, AlertTriangle, RotateCcw, CheckSquare, PlayCircle } from "lucide-react";
 import { closeBoardPermanently, updateBoardSettings, BoardData } from "@/services/boardService";
 import { resetAllVotes } from "@/services/notesService";
 import { toast } from "@/hooks/use-toast";
@@ -21,6 +21,7 @@ interface RetroSidebarProps {
   participantCount?: number;
   currentUsername: string;
   isOnlineMode?: boolean;
+  onActionsToggle?: (enabled: boolean) => void;
 }
 
 const RetroSidebar = ({
@@ -32,13 +33,15 @@ const RetroSidebar = ({
                         onCloseRetro,
                         participantCount = 1,
                         currentUsername,
-                        isOnlineMode = false
+                        isOnlineMode = false,
+                        onActionsToggle
                       }: RetroSidebarProps) => {
   // États locaux pour les paramètres (modifiables avant sauvegarde)
   const [localVotingEnabled, setLocalVotingEnabled] = useState(false);
   const [localShowOthersCards, setLocalShowOthersCards] = useState(true);
   const [localAddingCardsDisabled, setLocalAddingCardsDisabled] = useState(false);
   const [localMaxVotesPerPerson, setLocalMaxVotesPerPerson] = useState(3);
+  const [localActionsEnabled, setLocalActionsEnabled] = useState(false);
 
   // États pour les dialogues
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -57,6 +60,7 @@ const RetroSidebar = ({
       setLocalShowOthersCards(!boardData.hideCardsFromOthers);
       setLocalAddingCardsDisabled(boardData.addingCardsDisabled);
       setLocalMaxVotesPerPerson(boardData.votesPerParticipant);
+      setLocalActionsEnabled(boardData.actionsEnabled);
       setHasUnsavedChanges(false);
     }
   }, [boardData]);
@@ -66,7 +70,8 @@ const RetroSidebar = ({
       votingEnabled: boolean,
       showOthersCards: boolean,
       addingCardsDisabled: boolean,
-      maxVotes: number
+      maxVotes: number,
+      actionsEnabled: boolean
   ) => {
     if (!boardData) return false;
 
@@ -74,30 +79,41 @@ const RetroSidebar = ({
         votingEnabled !== boardData.votingEnabled ||
         showOthersCards !== !boardData.hideCardsFromOthers ||
         addingCardsDisabled !== boardData.addingCardsDisabled ||
-        maxVotes !== boardData.votesPerParticipant
+        maxVotes !== boardData.votesPerParticipant ||
+        actionsEnabled !== boardData.actionsEnabled
     );
   };
 
   // Gestionnaires de changements avec détection
   const handleVotingChange = (enabled: boolean) => {
     setLocalVotingEnabled(enabled);
-    setHasUnsavedChanges(checkForChanges(enabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson));
+    setHasUnsavedChanges(checkForChanges(enabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, localActionsEnabled));
   };
 
   const handleVisibilityChange = (show: boolean) => {
     setLocalShowOthersCards(show);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, show, localAddingCardsDisabled, localMaxVotesPerPerson));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, show, localAddingCardsDisabled, localMaxVotesPerPerson, localActionsEnabled));
   };
 
   const handleAddingCardsChange = (disabled: boolean) => {
     setLocalAddingCardsDisabled(disabled);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, disabled, localMaxVotesPerPerson));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, disabled, localMaxVotesPerPerson, localActionsEnabled));
   };
 
   const handleMaxVotesChange = (max: number) => {
     if (max < 1 || max > 20) return;
     setLocalMaxVotesPerPerson(max);
-    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, max));
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, max, localActionsEnabled));
+  };
+
+  const handleActionsChange = (enabled: boolean) => {
+    setLocalActionsEnabled(enabled);
+    setHasUnsavedChanges(checkForChanges(localVotingEnabled, localShowOthersCards, localAddingCardsDisabled, localMaxVotesPerPerson, enabled));
+
+    // Appeler immédiatement le callback pour l'interface
+    if (onActionsToggle) {
+      onActionsToggle(enabled);
+    }
   };
 
   // Fonction de sauvegarde
@@ -114,7 +130,8 @@ const RetroSidebar = ({
         votingEnabled: localVotingEnabled,
         hideCardsFromOthers: !localShowOthersCards,
         votesPerParticipant: localMaxVotesPerPerson,
-        addingCardsDisabled: localAddingCardsDisabled
+        addingCardsDisabled: localAddingCardsDisabled,
+        actionsEnabled: localActionsEnabled
       });
 
       setHasUnsavedChanges(false);
@@ -144,7 +161,13 @@ const RetroSidebar = ({
       setLocalShowOthersCards(!boardData.hideCardsFromOthers);
       setLocalAddingCardsDisabled(boardData.addingCardsDisabled);
       setLocalMaxVotesPerPerson(boardData.votesPerParticipant);
+      setLocalActionsEnabled(boardData.actionsEnabled);
       setHasUnsavedChanges(false);
+
+      // Remettre l'interface en cohérence
+      if (onActionsToggle) {
+        onActionsToggle(boardData.actionsEnabled);
+      }
     }
   };
 
@@ -268,6 +291,13 @@ const RetroSidebar = ({
                     <span className="text-sm text-gray-600">Ajout de cartes</span>
                     <span className={`text-sm font-medium ${boardData?.addingCardsDisabled ? 'text-red-600' : 'text-green-600'}`}>
                     {boardData?.addingCardsDisabled ? 'Désactivé' : 'Autorisé'}
+                  </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Plan d'actions</span>
+                    <span className={`text-sm font-medium ${boardData?.actionsEnabled ? 'text-green-600' : 'text-gray-500'}`}>
+                    {boardData?.actionsEnabled ? 'Activé' : 'Désactivé'}
                   </span>
                   </div>
                 </div>
@@ -485,6 +515,49 @@ const RetroSidebar = ({
 
             <Separator />
 
+            {/* Gestion des Actions */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <CheckSquare className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Plan d'Actions</h3>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="enable-actions" className="text-sm font-medium">
+                    Activer le plan d'actions
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    Permet de créer des actions à partir des cartes
+                  </p>
+                </div>
+                <Switch
+                    id="enable-actions"
+                    checked={localActionsEnabled}
+                    onCheckedChange={handleActionsChange}
+                />
+              </div>
+
+              {localActionsEnabled && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <PlayCircle className="w-4 h-4 text-blue-600" />
+                      <h4 className="text-sm font-medium text-blue-800">Mode Actions activé</h4>
+                    </div>
+                    <p className="text-xs text-blue-700 mb-2">
+                      Un nouvel onglet "Actions" est maintenant disponible. Les participants peuvent :
+                    </p>
+                    <ul className="text-xs text-blue-700 space-y-1">
+                      <li>• Faire un clic droit sur les cartes pour créer des actions</li>
+                      <li>• Proposer des actions (vous devrez les approuver)</li>
+                      <li>• Suivre l'avancement des actions approuvées</li>
+                    </ul>
+                  </div>
+              )}
+            </div>
+
+            <Separator />
+
             {/* Boutons de sauvegarde */}
             {isOnlineMode && (
                 <>
@@ -632,6 +705,7 @@ const RetroSidebar = ({
                     <div>• Votes : {localVotingEnabled ? `Activés (${localMaxVotesPerPerson} max par personne)` : 'Désactivés'}</div>
                     <div>• Visibilité : {localShowOthersCards ? 'Toutes les cartes visibles' : 'Cartes personnelles uniquement'}</div>
                     <div>• Ajout de cartes : {localAddingCardsDisabled ? 'Désactivé' : 'Autorisé'}</div>
+                    <div>• Plan d'actions : {localActionsEnabled ? 'Activé' : 'Désactivé'}</div>
                   </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>

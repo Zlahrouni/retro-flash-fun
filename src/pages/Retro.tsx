@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, Share2, Target, Users, AlertCircle, Crown, User, Grid3X3, CheckSquare } from "lucide-react";
 import RetroSidebar from "@/components/RetroSidebar";
 import RetroBoard from "@/components/RetroBoard";
-import ActionBoard from "@/components/ActionBoard";
+import EnhancedActionBoard from "@/components/EnhancedActionBoard";
 import { toast } from "@/hooks/use-toast";
 import { getBoard, BoardData, subscribeToBoardUpdates } from "@/services/boardService";
 import {
@@ -18,6 +18,10 @@ import {
   filterNotesByVisibility,
   NoteData
 } from "@/services/notesService";
+import {
+  createAction,
+  approveAction
+} from "@/services/actionsService";
 
 interface Card {
   id: string;
@@ -52,6 +56,7 @@ const Retro = () => {
   const [isMaster, setIsMaster] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
   const [activeTab, setActiveTab] = useState("retro-board");
+  const [actionsEnabled, setActionsEnabled] = useState(false);
 
   // Fonction pour créer les colonnes par défaut à partir des données du board
   const createColumnsFromBoardData = (boardData: BoardData): Column[] => {
@@ -99,14 +104,14 @@ const Retro = () => {
           votes: note.voteCount,
           hasVoted: note.voters.includes(currentUserId)
         }))
-        .sort((a, b) => b.votes - a.votes); // Trier par votes décroissants
+        .sort((a, b) => b.votes - a.votes);
   };
 
   // Charger les données du board et s'abonner aux notes
   useEffect(() => {
     const loadBoard = async () => {
       if (!retroId) {
-        // Mode hors ligne : utiliser les données par défaut
+        // Mode hors ligne
         setColumns(getDefaultColumns());
         setCurrentUsername("Vous");
         setIsMaster(true);
@@ -115,7 +120,6 @@ const Retro = () => {
       }
 
       try {
-        // Charger les données du board depuis Firebase
         const data = await getBoard(retroId);
         if (!data) {
           setError("Board non trouvé");
@@ -130,18 +134,17 @@ const Retro = () => {
         }
 
         setBoardData(data);
+        setActionsEnabled(data.actionsEnabled);
 
-        // Gestion des utilisateurs et redirection
+        // Gestion des utilisateurs
         const savedUsername = localStorage.getItem(`username_${retroId}`);
         const isCreator = location.state?.isCreator === true;
 
         if (!savedUsername) {
           if (isCreator) {
-            // Si c'est le créateur, sauvegarder son nom automatiquement
             localStorage.setItem(`username_${retroId}`, data.createdBy);
             setCurrentUsername(data.createdBy);
           } else {
-            // Rediriger les autres utilisateurs vers la page de saisie du nom
             navigate(`/join/${retroId}`);
             return;
           }
@@ -149,19 +152,16 @@ const Retro = () => {
           setCurrentUsername(savedUsername);
         }
 
-        // Déterminer si l'utilisateur est le master (créateur)
         const username = savedUsername || data.createdBy;
         setIsMaster(username === data.createdBy);
-
-        // Créer les colonnes depuis les données du board
         setColumns(createColumnsFromBoardData(data));
 
-        // S'abonner aux mises à jour du board en temps réel
+        // Abonnements temps réel
         const unsubscribeBoard = subscribeToBoardUpdates(retroId, (updatedBoardData) => {
           if (updatedBoardData) {
             setBoardData(updatedBoardData);
+            setActionsEnabled(updatedBoardData.actionsEnabled);
 
-            // Si le board devient inactif, rediriger
             if (!updatedBoardData.isActive) {
               setError("Cette rétrospective a été fermée par l'administrateur");
               toast({
@@ -169,22 +169,17 @@ const Retro = () => {
                 description: "Cette rétrospective a été fermée par l'administrateur.",
                 variant: "destructive"
               });
-              // Rediriger après 3 secondes
-              setTimeout(() => {
-                navigate("/");
-              }, 3000);
+              setTimeout(() => navigate("/"), 3000);
             }
           } else {
             setError("Board supprimé ou inaccessible");
           }
         });
 
-        // S'abonner aux notes en temps réel
         const unsubscribeNotes = subscribeToNotes(retroId, (notesData) => {
           setNotes(notesData);
         });
 
-        // Nettoyer les abonnements au démontage du composant
         return () => {
           unsubscribeBoard();
           unsubscribeNotes();
@@ -192,10 +187,10 @@ const Retro = () => {
 
       } catch (err) {
         console.error("Erreur lors du chargement du board:", err);
-        // En cas d'erreur Firebase, utiliser les données par défaut
         setColumns(getDefaultColumns());
         setCurrentUsername("Vous");
         setIsMaster(true);
+        setActionsEnabled(false);
       } finally {
         setLoading(false);
       }
@@ -207,7 +202,6 @@ const Retro = () => {
   // Mettre à jour les colonnes quand les notes changent
   useEffect(() => {
     if (columns.length > 0 && notes.length >= 0) {
-      // Utiliser les paramètres Firebase pour le filtrage
       const hideFromOthers = boardData ? boardData.hideCardsFromOthers : false;
       const filteredNotes = filterNotesByVisibility(notes, currentUsername, hideFromOthers);
 
@@ -220,7 +214,6 @@ const Retro = () => {
 
   // Fonctions de gestion des cartes
   const addCard = async (columnId: string, text: string) => {
-    // Vérifier si l'ajout de cartes est désactivé
     const addingDisabled = boardData ? boardData.addingCardsDisabled : false;
 
     if (addingDisabled) {
@@ -233,7 +226,7 @@ const Retro = () => {
     }
 
     if (!retroId || !boardData) {
-      // Mode hors ligne - garder l'ancienne logique
+      // Mode hors ligne
       const newCard: Card = {
         id: Date.now().toString(),
         text,
@@ -284,7 +277,6 @@ const Retro = () => {
 
   const deleteCard = async (columnId: string, cardId: string) => {
     if (!retroId || !boardData) {
-      // Mode hors ligne - garder l'ancienne logique
       setColumns(prev =>
           prev.map(col =>
               col.id === columnId
@@ -302,7 +294,6 @@ const Retro = () => {
 
     try {
       await deleteNote(retroId, cardId);
-
       toast({
         title: "Carte supprimée",
         description: "La carte a été supprimée avec succès.",
@@ -318,7 +309,6 @@ const Retro = () => {
   };
 
   const voteCard = async (columnId: string, cardId: string) => {
-    // Vérifier si le système de vote est activé
     const votingEnabled = boardData ? boardData.votingEnabled : true;
 
     if (!votingEnabled) {
@@ -331,7 +321,7 @@ const Retro = () => {
     }
 
     if (!retroId || !boardData) {
-      // Mode hors ligne - garder l'ancienne logique
+      // Mode hors ligne
       setColumns(prev =>
           prev.map(col =>
               col.id === columnId
@@ -354,7 +344,6 @@ const Retro = () => {
     }
 
     try {
-      // Vérifier si l'utilisateur a encore des votes disponibles
       const currentNote = notes.find(note => note.id === cardId);
       if (!currentNote) return;
 
@@ -386,11 +375,110 @@ const Retro = () => {
     }
   };
 
-  const getFilteredCards = (cards: Card[]) => {
-    // En mode Firebase, utiliser boardData.hideCardsFromOthers
-    // En mode local, afficher toutes les cartes
-    const shouldHide = boardData ? boardData.hideCardsFromOthers : false;
+  // Fonctions de gestion des actions
+  const handleDuplicateToActions = async (card: Card, columnTitle: string) => {
+    if (!retroId || !boardData || retroId === 'local') {
+      toast({
+        title: "Mode hors ligne",
+        description: "La fonctionnalité d'actions n'est disponible qu'en mode en ligne.",
+        variant: "destructive"
+      });
+      return;
+    }
 
+    try {
+      const actionId = await createAction({
+        boardId: retroId,
+        title: `Action basée sur: ${card.text.substring(0, 50)}${card.text.length > 50 ? '...' : ''}`,
+        linkedNoteId: card.id,
+        linkedNoteContent: card.text,
+        linkedNoteColumn: columnTitle,
+        createdBy: currentUsername,
+        assignedTo: [currentUsername]
+      });
+
+      // Si c'est l'admin, approuver automatiquement
+      if (isMaster) {
+        await approveAction({ boardId: retroId, actionId, approvedBy: currentUsername });
+        toast({
+          title: "Action créée et approuvée",
+          description: "L'action a été automatiquement approuvée et ajoutée au plan d'actions.",
+        });
+      } else {
+        toast({
+          title: "Proposition envoyée",
+          description: "Votre proposition d'action a été envoyée à l'administrateur.",
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors de la duplication:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer l'action.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCreateDirectAction = async (
+      card: Card,
+      columnTitle: string,
+      actionData: {
+        title: string;
+        description?: string;
+        assignedTo: string[];
+        dueDate?: string;
+        priority: 'low' | 'medium' | 'high';
+      }
+  ) => {
+    if (!retroId || !boardData || retroId === 'local') {
+      toast({
+        title: "Mode hors ligne",
+        description: "La fonctionnalité d'actions n'est disponible qu'en mode en ligne.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const actionId = await createAction({
+        boardId: retroId,
+        title: actionData.title,
+        linkedNoteId: card.id,
+        linkedNoteContent: card.text,
+        linkedNoteColumn: columnTitle,
+        createdBy: currentUsername,
+        assignedTo: actionData.assignedTo,
+        description: actionData.description,
+        dueDate: actionData.dueDate,
+        priority: actionData.priority
+      });
+
+      // Si c'est l'admin, approuver automatiquement
+      if (isMaster) {
+        await approveAction({ boardId: retroId, actionId, approvedBy: currentUsername });
+        toast({
+          title: "Action créée et approuvée",
+          description: "L'action a été automatiquement approuvée et ajoutée au plan d'actions.",
+        });
+      } else {
+        toast({
+          title: "Proposition envoyée",
+          description: "Votre proposition d'action a été envoyée à l'administrateur pour approbation.",
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors de la création de l'action:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer l'action.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getFilteredCards = (cards: Card[]) => {
+    const shouldHide = boardData ? boardData.hideCardsFromOthers : false;
     if (shouldHide) {
       return cards.filter(card => card.author === currentUsername);
     }
@@ -415,6 +503,10 @@ const Retro = () => {
       variant: "destructive"
     });
     navigate("/");
+  };
+
+  const handleActionsToggle = (enabled: boolean) => {
+    setActionsEnabled(enabled);
   };
 
   // États de chargement et d'erreur
@@ -457,17 +549,15 @@ const Retro = () => {
     );
   }
 
-  // Déterminer le titre et les informations à afficher
+  // Données d'affichage
   const displayTitle = boardData ? boardData.name : (location.state?.retroType?.title || "Rétrospective");
   const displayId = retroId || "local";
 
-  // Calculer les votes restants pour l'utilisateur
   const userVotesUsed = retroId && boardData ?
       notes.reduce((count, note) => count + (note.voters.includes(currentUsername) ? 1 : 0), 0) : 0;
   const maxVotesPerPerson = boardData ? boardData.votesPerParticipant : 3;
   const userVotesRemaining = maxVotesPerPerson - userVotesUsed;
 
-  // Vérifier si le système de vote est activé
   const isVotingEnabled = boardData ? boardData.votingEnabled : true;
 
   return (
@@ -485,7 +575,6 @@ const Retro = () => {
                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                     <span>ID: {displayId}</span>
 
-                    {/* Informations du board */}
                     {boardData && (
                         <>
                           <div className="flex items-center space-x-1">
@@ -496,7 +585,6 @@ const Retro = () => {
                         </>
                     )}
 
-                    {/* Informations de l'utilisateur */}
                     {currentUsername && (
                         <div className="flex items-center space-x-1">
                           {isMaster ? (
@@ -511,15 +599,9 @@ const Retro = () => {
                     )}
 
                     {/* Statut de connexion */}
-                    {boardData && (
-                        <span className="text-green-600 font-medium">⚡ En ligne</span>
-                    )}
-                    {!boardData && retroId && (
-                        <span className="text-yellow-600 font-medium">🔄 Connexion...</span>
-                    )}
-                    {!retroId && (
-                        <span className="text-orange-600 font-medium">📱 Mode local</span>
-                    )}
+                    {boardData && <span className="text-green-600 font-medium">⚡ En ligne</span>}
+                    {!boardData && retroId && <span className="text-yellow-600 font-medium">🔄 Connexion...</span>}
+                    {!retroId && <span className="text-orange-600 font-medium">📱 Mode local</span>}
 
                     {/* Informations de vote */}
                     {isVotingEnabled && activeTab === "retro-board" && (
@@ -533,26 +615,21 @@ const Retro = () => {
                     {!isVotingEnabled && activeTab === "retro-board" && (
                         <span className="text-gray-500 font-medium">Votes désactivés</span>
                     )}
+
+                    {/* Statut des actions */}
+                    {actionsEnabled && (
+                        <span className="text-purple-600 font-medium">🎯 Actions activées</span>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center space-x-3">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={shareRetro}
-                    className="flex items-center space-x-2"
-                >
+                <Button variant="outline" size="sm" onClick={shareRetro} className="flex items-center space-x-2">
                   <Share2 className="w-4 h-4" />
                   <span>Partager</span>
                 </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSidebarOpen(true)}
-                    className="flex items-center space-x-2"
-                >
+                <Button variant="outline" size="sm" onClick={() => setSidebarOpen(true)} className="flex items-center space-x-2">
                   <Settings className="w-4 h-4" />
                   <span>{isMaster ? 'Administration' : 'Informations'}</span>
                 </Button>
@@ -564,7 +641,7 @@ const Retro = () => {
         {/* Main Content with Tabs */}
         <main className="container mx-auto px-4 py-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto mb-8 bg-white/80 backdrop-blur-sm">
+            <TabsList className={`grid w-full ${actionsEnabled ? 'grid-cols-2' : 'grid-cols-1'} max-w-md mx-auto mb-8 bg-white/80 backdrop-blur-sm`}>
               <TabsTrigger
                   value="retro-board"
                   className="flex items-center space-x-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-900"
@@ -572,13 +649,16 @@ const Retro = () => {
                 <Grid3X3 className="w-4 h-4" />
                 <span>Retro Board</span>
               </TabsTrigger>
-              <TabsTrigger
-                  value="actions"
-                  className="flex items-center space-x-2 data-[state=active]:bg-green-100 data-[state=active]:text-green-900"
-              >
-                <CheckSquare className="w-4 h-4" />
-                <span>Actions</span>
-              </TabsTrigger>
+
+              {actionsEnabled && (
+                  <TabsTrigger
+                      value="actions"
+                      className="flex items-center space-x-2 data-[state=active]:bg-green-100 data-[state=active]:text-green-900"
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    <span>Actions</span>
+                  </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="retro-board" className="mt-0">
@@ -593,17 +673,25 @@ const Retro = () => {
                   onDeleteCard={deleteCard}
                   onVoteCard={voteCard}
                   getFilteredCards={getFilteredCards}
+                  actionsEnabled={actionsEnabled}
+                  isMaster={isMaster}
+                  boardParticipants={boardData ? boardData.participants : [currentUsername]}
+                  onDuplicateToActions={handleDuplicateToActions}
+                  onCreateDirectAction={handleCreateDirectAction}
               />
             </TabsContent>
 
-            <TabsContent value="actions" className="mt-0">
-              <ActionBoard
-                  boardData={boardData}
-                  currentUsername={currentUsername}
-                  isMaster={isMaster}
-                  retroId={displayId}
-              />
-            </TabsContent>
+            {actionsEnabled && (
+                <TabsContent value="actions" className="mt-0">
+                  <EnhancedActionBoard
+                      boardData={boardData}
+                      currentUsername={currentUsername}
+                      isMaster={isMaster}
+                      retroId={displayId}
+                      isOnlineMode={!!boardData}
+                  />
+                </TabsContent>
+            )}
           </Tabs>
         </main>
 
@@ -618,6 +706,7 @@ const Retro = () => {
             participantCount={boardData ? boardData.participants.length : 1}
             currentUsername={currentUsername}
             isOnlineMode={!!boardData}
+            onActionsToggle={handleActionsToggle}
         />
       </div>
   );

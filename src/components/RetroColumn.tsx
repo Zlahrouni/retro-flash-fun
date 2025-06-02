@@ -30,7 +30,23 @@ interface RetroColumnProps {
     votingEnabled: boolean;
     addingDisabled: boolean;
     currentUsername: string;
-    userCanVote?: boolean; // Indique si l'utilisateur peut encore voter
+    userCanVote?: boolean;
+
+    actionsEnabled: boolean;
+    isMaster: boolean;
+    boardParticipants: string[];
+    onDuplicateToActions: (card: Card, columnTitle: string) => void;
+    onCreateDirectAction: (
+        card: Card,
+        columnTitle: string,
+        actionData: {
+            title: string;
+            description?: string;
+            assignedTo: string[];
+            dueDate?: string;
+            priority: 'low' | 'medium' | 'high';
+        }
+    ) => void;
 }
 
 const RetroColumn = ({
@@ -88,7 +104,13 @@ const RetroColumn = ({
                         onVote={() => onVoteCard(column.id, card.id)}
                         votingEnabled={votingEnabled}
                         currentUsername={currentUsername}
-                        canVote={userCanVote || card.hasVoted} // Peut voter si limite non atteinte OU si déjà voté (pour retirer le vote)
+                        canVote={userCanVote || card.hasVoted}
+                        columnTitle={column.title}
+                        actionsEnabled={actionsEnabled}
+                        isMaster={isMaster}
+                        boardParticipants={boardParticipants}
+                        onDuplicateToActions={onDuplicateToActions}
+                        onCreateDirectAction={onCreateDirectAction}
                     />
                 ))}
 

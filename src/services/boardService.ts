@@ -20,7 +20,8 @@ export interface BoardData {
     hideCardsFromOthers: boolean;
     votingEnabled: boolean;
     votesPerParticipant: number;
-    addingCardsDisabled: boolean; // Nouveau champ ajouté
+    addingCardsDisabled: boolean;
+    actionsEnabled: boolean;
     participants: string[];
 }
 
@@ -36,7 +37,8 @@ export interface UpdateBoardSettingsParams {
     hideCardsFromOthers?: boolean;
     votingEnabled?: boolean;
     votesPerParticipant?: number;
-    addingCardsDisabled?: boolean; // Nouveau paramètre
+    addingCardsDisabled?: boolean;
+    actionsEnabled?: boolean;
 }
 
 // Génère un ID unique alphanumérique de 6 caractères maximum
@@ -60,10 +62,11 @@ export const createBoard = async (params: CreateBoardParams): Promise<string> =>
         createdBy: params.username,
         isActive: true,
         columns: params.columns,
-        hideCardsFromOthers: true, // Par défaut, masquer les cartes des autres
-        votingEnabled: false, // Par défaut, votes désactivés
-        votesPerParticipant: 3, // Par défaut, 3 votes maximum
-        addingCardsDisabled: false, // Par défaut, ajout de cartes autorisé
+        hideCardsFromOthers: true,
+        votingEnabled: false,
+        votesPerParticipant: 3,
+        addingCardsDisabled: false,
+        actionsEnabled: false,
         participants: [params.username]
     };
 
@@ -169,6 +172,10 @@ export const updateBoardSettings = async (params: UpdateBoardSettingsParams): Pr
 
         if (params.addingCardsDisabled !== undefined) {
             updates.addingCardsDisabled = params.addingCardsDisabled;
+        }
+
+        if (params.actionsEnabled !== undefined) {
+            updates.actionsEnabled = params.actionsEnabled;
         }
 
         // Effectuer la mise à jour
